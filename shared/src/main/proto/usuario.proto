@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+option java_package = "br.com.fiaprestaurante.grpc";
+option java_outer_classname = "UsuarioProto";
+option java_multiple_files = true;
+
+package fiaprestaurante;
+
+// Serviço gRPC para comunicação entre microsserviços que precisam consultar dados de usuários.
+// Utilizado pelos módulos de pagamento e restaurante/pedido para verificar permissões.
+service UsuarioService {
+    // Busca os dados de um usuário pelo seu identificador público
+    rpc BuscarUsuario (BuscarUsuarioRequest) returns (UsuarioResponse);
+
+    // Verifica se um usuário possui o perfil necessário para uma operação
+    rpc VerificarPerfil (VerificarPerfilRequest) returns (VerificarPerfilResponse);
+}
+
+message BuscarUsuarioRequest {
+    string publicId = 1;
+}
+
+message UsuarioResponse {
+    string publicId = 1;
+    string nome = 2;
+    string email = 3;
+    string perfil = 4;
+}
+
+message VerificarPerfilRequest {
+    string publicId = 1;
+    string perfilRequerido = 2;
+}
+
+message VerificarPerfilResponse {
+    bool autorizado = 1;
+}

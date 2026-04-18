@@ -1,0 +1,14 @@
+"""
+Schema GraphQL — modulo restaurante-pedido
+"""
+
+type ModuloRestaurantePedido {
+    nome: String!
+    implementado: Boolean!
+    descricao: String!
+}
+
+type Query {
+    "Retorna o status do módulo restaurante/pedido. Requer autenticação."
+    statusModuloRestaurantePedido: ModuloRestaurantePedido
+}

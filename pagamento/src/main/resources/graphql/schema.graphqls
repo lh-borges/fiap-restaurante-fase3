@@ -1,0 +1,14 @@
+"""
+Schema GraphQL — modulo pagamento
+"""
+
+type ModuloPagamento {
+    nome: String!
+    implementado: Boolean!
+    descricao: String!
+}
+
+type Query {
+    "Retorna o status do módulo de pagamento. Requer autenticação."
+    statusModuloPagamento: ModuloPagamento
+}

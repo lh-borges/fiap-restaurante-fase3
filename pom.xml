@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.0.5</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>br.com.fiaprestaurante</groupId>
+    <artifactId>fiap-restaurante</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>fiap-restaurante</name>
+    <description>Microsserviços Spring Boot com GraphQL, gRPC e Arquitetura Hexagonal</description>
+
+    <modules>
+        <module>shared</module>
+        <module>usuario-autenticacao</module>
+        <module>restaurante-pedido</module>
+        <module>pagamento</module>
+    </modules>
+
+    <properties>
+        <java.version>25</java.version>
+        <grpc.version>1.68.1</grpc.version>
+        <jbcrypt.version>0.4</jbcrypt.version>
+        <rest-assured.version>5.5.0</rest-assured.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>br.com.fiaprestaurante</groupId>
+                <artifactId>shared</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-bom</artifactId>
+                <version>${grpc.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.mindrot</groupId>
+                <artifactId>jbcrypt</artifactId>
+                <version>${jbcrypt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.rest-assured</groupId>
+                <artifactId>rest-assured</artifactId>
+                <version>${rest-assured.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>

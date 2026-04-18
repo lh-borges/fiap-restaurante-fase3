@@ -1,0 +1,48 @@
+"""
+Schema GraphQL — modulo usuario-autenticacao
+"""
+
+enum PerfilUsuario {
+    USUARIO
+    DONO_RESTAURANTE
+}
+
+type Usuario {
+    "Identificador público do usuário (UUID)"
+    id: String!
+    nome: String!
+    email: String!
+    perfil: String!
+    criadoEm: String!
+}
+
+type AuthPayload {
+    token: String!
+    tipoToken: String!
+    expiraEmSegundos: Int!
+    usuario: Usuario!
+}
+
+input CadastrarUsuarioInput {
+    nome: String!
+    email: String!
+    senha: String!
+    perfil: PerfilUsuario!
+}
+
+input LoginInput {
+    email: String!
+    senha: String!
+}
+
+type Query {
+    "Retorna o usuário autenticado a partir do JWT."
+    me: Usuario
+}
+
+type Mutation {
+    "Cadastra um novo usuário."
+    cadastrarUsuario(input: CadastrarUsuarioInput!): Usuario!
+    "Autentica um usuário e retorna um token JWT."
+    login(input: LoginInput!): AuthPayload!
+}
