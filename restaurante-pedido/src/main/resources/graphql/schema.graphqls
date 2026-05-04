@@ -8,7 +8,60 @@ type ModuloRestaurantePedido {
     descricao: String!
 }
 
-type Query {
+type ItemPedido {
+    produtoId: ID!
+    nome: String!
+    quantidade: Int!
+    preco: Float!
+}
+
+type PedidoResumo {
+    pedidoId: ID!
+    valorTotal: Float!
+    status: String!
+}
+
+type Pedido {
+    id: ID!
+    clienteId: String!
+    clienteNome: String!
+    restauranteId: ID!
+    itens: [ItemPedido!]!
+    valorTotal: Float!
+    status: String!
+    criadoEm: String!
+}
+
+input ItemPedidoInput {
+    produtoId: ID!
+    nome: String!
+    quantidade: Int!
+    preco: Float!
+}
+
+input CriarPedidoInput {
+    restauranteId: ID!
+    itens: [ItemPedidoInput!]!
+}
+
+extend type Query {
     "Retorna o status do módulo restaurante/pedido. Requer autenticação."
     statusModuloRestaurantePedido: ModuloRestaurantePedido
+
+    "Busca pedido por ID."
+    buscarPedidoPorId(id: ID!): Pedido
+
+    "Busca todos os pedidos do cliente autenticado."
+    meusPedidos: [Pedido!]!
+
+    "Lista todos os pedidos. Requer perfil DONO_RESTAURANTE."
+    todosPedidos: [Pedido!]!
+}
+
+extend type Mutation {
+    "Cria um novo pedido."
+    criarPedido(input: CriarPedidoInput!): PedidoResumo!
+
+    "Confirma um pedido existente."
+    confirmarPedido(pedidoId: ID!): Boolean!
 }

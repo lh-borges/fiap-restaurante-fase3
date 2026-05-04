@@ -19,6 +19,14 @@ import org.springframework.security.web.SecurityFilterChain;
 import java.io.IOException;
 import java.security.interfaces.RSAPublicKey;
 
+/**
+ * Configuração de segurança da aplicação.
+ * Define as regras de autenticação e autorização via JWT,
+ * configurando o Spring Security como resource server OAuth2.
+ * Utiliza chave pública RSA para validação dos tokens JWT
+ * gerados pelo serviço usuario-autenticacao.
+ */
+
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
