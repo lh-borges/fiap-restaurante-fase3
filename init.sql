@@ -1,0 +1,3 @@
+CREATE DATABASE auth_db;
+CREATE DATABASE pedido_db;
+CREATE DATABASE pagamento_db;
