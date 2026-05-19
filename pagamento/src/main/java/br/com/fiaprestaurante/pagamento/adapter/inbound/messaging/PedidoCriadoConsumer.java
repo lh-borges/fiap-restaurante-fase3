@@ -11,6 +11,25 @@ import java.math.BigDecimal;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Consumer Kafka do tópico {@code pedido.criado} — ponto de entrada
+ * assíncrono do microsserviço.
+ *
+ * <p>Atende o requisito 5.3 da fase 3: quando o {@code restaurante-pedido}
+ * publica um novo pedido, este consumer dispara o fluxo de processamento
+ * de pagamento.
+ *
+ * <p>Payload esperado (campos mínimos):
+ * <pre>{@code
+ * {
+ *   "pedidoId":   "<uuid>",
+ *   "valorTotal": <decimal>
+ *   // outros campos como clienteId, restauranteId são ignorados se presentes
+ * }
+ * }</pre>
+ *
+ * @author Danilo Fernando
+ */
 @Component
 public class PedidoCriadoConsumer {
 
@@ -18,10 +37,27 @@ public class PedidoCriadoConsumer {
 
     private final ProcessarPagamentoUseCase processarPagamento;
 
+    /**
+     * @param processarPagamento porta de entrada que executa a lógica de pagamento
+     */
     public PedidoCriadoConsumer(ProcessarPagamentoUseCase processarPagamento) {
         this.processarPagamento = processarPagamento;
     }
 
+    /**
+     * Recebe e processa um evento {@code pedido.criado}.
+     *
+     * <p>Estratégia de erro:
+     * <ul>
+     *   <li>Payload inválido (campos faltando ou formato errado) é
+     *       <strong>descartado</strong> com log de erro — não faz sentido
+     *       reprocessar, o produtor enviou dado quebrado;</li>
+     *   <li>Falha do gateway ou de persistência <strong>propaga</strong> —
+     *       o Spring Kafka aplicará retry/DLQ conforme configurado.</li>
+     * </ul>
+     *
+     * @param event payload Kafka deserializado em {@link Map} (Jackson JSR310 já registrado)
+     */
     @KafkaListener(topics = "${pagamento.topics.pedido-criado}", groupId = "${spring.kafka.consumer.group-id}")
     public void consumir(Map<String, Object> event) {
         log.info("Evento recebido em pedido.criado: {}", event);

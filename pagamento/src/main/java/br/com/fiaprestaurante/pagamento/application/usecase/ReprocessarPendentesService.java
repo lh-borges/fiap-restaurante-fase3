@@ -11,6 +11,17 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+/**
+ * Implementação de {@link ReprocessarPendentesUseCase} — varre o repositório
+ * em busca de pagamentos PENDENTE e os reprocessa via
+ * {@link ProcessarPagamentoUseCase} (reusando exatamente o mesmo fluxo do
+ * caminho principal).
+ *
+ * <p>Chamada periodicamente pelo {@code ReprocessamentoPagamentoWorker}.
+ * Atende o requisito 4.6 da fase 3.
+ *
+ * @author Danilo Fernando
+ */
 @Service
 public class ReprocessarPendentesService implements ReprocessarPendentesUseCase {
 
@@ -19,12 +30,22 @@ public class ReprocessarPendentesService implements ReprocessarPendentesUseCase 
     private final PagamentoRepository pagamentoRepository;
     private final ProcessarPagamentoUseCase processarPagamento;
 
+    /**
+     * @param pagamentoRepository fonte dos pagamentos pendentes
+     * @param processarPagamento  use case principal que será reusado para cada pendente
+     */
     public ReprocessarPendentesService(PagamentoRepository pagamentoRepository,
                                        ProcessarPagamentoUseCase processarPagamento) {
         this.pagamentoRepository = pagamentoRepository;
         this.processarPagamento = processarPagamento;
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Cada pagamento é processado isoladamente — uma exceção em um
+     * elemento não interrompe os demais.
+     */
     @Override
     public int executar(int batchSize) {
         List<Pagamento> pendentes = pagamentoRepository.listarPendentes(batchSize);

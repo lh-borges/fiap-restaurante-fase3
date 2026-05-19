@@ -13,6 +13,16 @@ import org.springframework.kafka.test.context.EmbeddedKafka;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Smoke test que garante que o contexto Spring do {@code pagamento} sobe
+ * por inteiro com todos os beans wirados corretamente.
+ *
+ * <p>Usa H2 em memória (configurado em {@code src/test/resources/application.properties})
+ * no lugar do MySQL e {@link EmbeddedKafka} no lugar do broker real, então
+ * roda sem dependência externa.
+ *
+ * @author Danilo Fernando
+ */
 @SpringBootTest
 @EmbeddedKafka(partitions = 1, topics = {"pedido.criado", "pagamento.aprovado", "pagamento.pendente"})
 class PagamentoApplicationContextTest {
@@ -35,6 +45,10 @@ class PagamentoApplicationContextTest {
     @Autowired
     private PaymentEventPublisher paymentEventPublisher;
 
+    /**
+     * Verifica que os principais beans (use cases + ports de saída) estão
+     * disponíveis no contexto — falha aqui significa erro de wiring/config.
+     */
     @Test
     void deveCarregarTodosOsBeansPrincipais() {
         assertThat(processarPagamento).isNotNull();

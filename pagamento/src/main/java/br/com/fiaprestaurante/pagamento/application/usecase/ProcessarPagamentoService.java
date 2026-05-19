@@ -17,6 +17,29 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.Optional;
 
+/**
+ * Implementação de {@link ProcessarPagamentoUseCase} — orquestra o fluxo
+ * principal do microsserviço.
+ *
+ * <p>Algoritmo (transação única):
+ * <ol>
+ *   <li>Consulta se já existe pagamento para o {@code pedidoId}; se já estiver
+ *       APROVADO, retorna o existente (idempotência);</li>
+ *   <li>Cria ou reaproveita a entidade {@code Pagamento} e incrementa o
+ *       contador de tentativas;</li>
+ *   <li>Invoca o {@link PaymentGateway} (procpag) — qualquer exceção é
+ *       capturada em {@link #tentarGateway(ProcessarPagamentoCommand)} e
+ *       considerada como falha do gateway (não propaga);</li>
+ *   <li>Em sucesso: marca APROVADO, persiste e publica {@code pagamento.aprovado};</li>
+ *   <li>Em falha: marca PENDENTE com motivo, persiste e publica {@code pagamento.pendente}.</li>
+ * </ol>
+ *
+ * <p>Toda a operação roda dentro de uma {@link Transactional}, garantindo
+ * que persistência e publicação Kafka sejam consistentes do ponto de vista
+ * do banco (se a persistência falhar, nada é publicado).
+ *
+ * @author Danilo Fernando
+ */
 @Service
 public class ProcessarPagamentoService implements ProcessarPagamentoUseCase {
 
@@ -26,6 +49,13 @@ public class ProcessarPagamentoService implements ProcessarPagamentoUseCase {
     private final PaymentGateway paymentGateway;
     private final PaymentEventPublisher eventPublisher;
 
+    /**
+     * Construtor com injeção das três portas de saída necessárias.
+     *
+     * @param pagamentoRepository porta de persistência
+     * @param paymentGateway      porta para o gateway externo
+     * @param eventPublisher      porta para publicação de eventos
+     */
     public ProcessarPagamentoService(PagamentoRepository pagamentoRepository,
                                      PaymentGateway paymentGateway,
                                      PaymentEventPublisher eventPublisher) {
@@ -34,6 +64,7 @@ public class ProcessarPagamentoService implements ProcessarPagamentoUseCase {
         this.eventPublisher = eventPublisher;
     }
 
+    /** {@inheritDoc} */
     @Override
     @Transactional
     public PagamentoResponse executar(ProcessarPagamentoCommand command) {
@@ -68,6 +99,19 @@ public class ProcessarPagamentoService implements ProcessarPagamentoUseCase {
         return PagamentoResponse.from(salvo);
     }
 
+    /**
+     * Invoca o gateway externo capturando qualquer exceção.
+     *
+     * <p>Esta é a "fronteira de fallback" do use case: as anotações
+     * {@code @CircuitBreaker} e {@code @Retry} no {@link PaymentGateway}
+     * podem rethrow, mas aqui isolamos isso retornando simplesmente
+     * {@code false} — o que aciona a transição para {@code PENDENTE} no
+     * caller.
+     *
+     * @param command comando contendo {@code pedidoId} e valor
+     * @return {@code true} se o gateway autorizou; {@code false} se houve
+     *         qualquer falha (rede, CB aberto, retorno HTTP de erro)
+     */
     private boolean tentarGateway(ProcessarPagamentoCommand command) {
         try {
             return paymentGateway.processar(command.pedidoId(), command.valorTotal());
