@@ -35,7 +35,6 @@ import java.security.interfaces.RSAPublicKey;
  * <p>Importante: o filtro autoriza todas as URLs ({@code permitAll}); a
  * proteção é feita a nível de método nos controllers via {@link EnableMethodSecurity}.
  *
- * @author Danilo Fernando
  */
 @Configuration
 @EnableWebSecurity
