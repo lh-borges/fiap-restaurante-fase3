@@ -1,0 +1,475 @@
+{
+  "info": {
+    "name": "fiap-fase-3-restaurante",
+    "_postman_id": "fiap-fase-3-restaurante-collection",
+    "description": "Colecao GraphQL para os tres servicos do FIAP Restaurante.\n\n**Importante:** importe tambem o environment `fiap-fase-3-restaurante.postman_environment.json` e selecione-o no canto superior direito do Postman. As URLs e credenciais vem de la - para apontar para outro host, basta editar o environment.\n\n**Variaveis de environment:**\n- `authUrl`, `pedidoUrl`, `pagamentoUrl` -> endpoints GraphQL dos servicos\n- `usuarioEmail`/`usuarioSenha`, `donoEmail`/`donoSenha` -> contas seed\n- `restauranteId` -> restaurante usado nos pedidos de teste\n\n**Variaveis de collection (runtime, preenchidas automaticamente):**\n- `token` -> JWT salvo apos o login\n- `pedidoId` -> ID do ultimo pedido criado\n- `itensAleatorios` -> itens sorteados pelo pre-request da massa de testes\n\n**Perfis:** `USUARIO` | `DONO_RESTAURANTE`\n\n**Contas seed (criadas na inicializacao):**\n- usuario@fiap.com / usuario123 -> USUARIO\n- dono@fiap.com / dono123 -> DONO_RESTAURANTE\n\n**Fluxo basico:**\n1. `Login como Usuario` -> o JWT e salvo em `{{token}}`.\n2. `Criar Pedido` -> o `pedidoId` e salvo.\n3. `Confirmar Pedido` -> publica `pedido.criado` no Kafka.\n4. O servico de pagamento consome, chama o `procpag` e responde `pagamento.aprovado` ou `pagamento.pendente`.\n5. `Pedido por ID` -> status final (`PAGO` ou `PENDENTE_PAGAMENTO`).\n\n**Massa de testes:** a pasta `4. Massa de Testes` foi feita para o Collection Runner - veja as instrucoes na descricao da pasta.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "token",
+      "value": "",
+      "type": "string",
+      "description": "JWT Bearer token. Preenchido automaticamente apos o Login."
+    },
+    {
+      "key": "pedidoId",
+      "value": "",
+      "type": "string",
+      "description": "ID do pedido criado. Preenchido automaticamente por Criar Pedido."
+    },
+    {
+      "key": "itensAleatorios",
+      "value": "[{\"produtoId\":\"00000000-0000-4000-8000-000000000001\",\"nome\":\"X-Burger\",\"quantidade\":1,\"preco\":\"25.90\"}]",
+      "type": "string",
+      "description": "Itens do pedido em JSON. Sobrescrito pelo pre-request da massa de testes."
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Autenticacao",
+      "item": [
+        {
+          "name": "Cadastrar Usuario (USUARIO)",
+          "request": {
+            "method": "POST",
+            "url": "{{authUrl}}",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation CadastrarUsuario($input: CadastrarUsuarioInput!) {\n  cadastrarUsuario(input: $input) {\n    id\n    nome\n    email\n    perfil\n    criadoEm\n  }\n}",
+                "variables": "{\n  \"input\": {\n    \"nome\": \"{{$randomFullName}}\",\n    \"email\": \"{{$randomEmail}}\",\n    \"senha\": \"123456\",\n    \"perfil\": \"USUARIO\"\n  }\n}"
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Cadastrar Dono de Restaurante (DONO_RESTAURANTE)",
+          "request": {
+            "method": "POST",
+            "url": "{{authUrl}}",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation CadastrarUsuario($input: CadastrarUsuarioInput!) {\n  cadastrarUsuario(input: $input) {\n    id\n    nome\n    email\n    perfil\n    criadoEm\n  }\n}",
+                "variables": "{\n  \"input\": {\n    \"nome\": \"{{$randomFullName}}\",\n    \"email\": \"{{$randomEmail}}\",\n    \"senha\": \"123456\",\n    \"perfil\": \"DONO_RESTAURANTE\"\n  }\n}"
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login como Usuario",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var json = pm.response.json();",
+                  "var token = json && json.data && json.data.login ? json.data.login.token : null;",
+                  "if (token) {",
+                  "    pm.collectionVariables.set('token', token);",
+                  "    console.log('Token JWT salvo.');",
+                  "} else {",
+                  "    console.warn('Token nao encontrado:', JSON.stringify(json));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{authUrl}}",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation Login($input: LoginInput!) {\n  login(input: $input) {\n    token\n    tipoToken\n    expiraEmSegundos\n    usuario {\n      id\n      nome\n      email\n      perfil\n    }\n  }\n}",
+                "variables": "{\n  \"input\": {\n    \"email\": \"{{usuarioEmail}}\",\n    \"senha\": \"{{usuarioSenha}}\"\n  }\n}"
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login como Dono do Restaurante",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var json = pm.response.json();",
+                  "var token = json && json.data && json.data.login ? json.data.login.token : null;",
+                  "if (token) {",
+                  "    pm.collectionVariables.set('token', token);",
+                  "    console.log('Token JWT salvo.');",
+                  "} else {",
+                  "    console.warn('Token nao encontrado:', JSON.stringify(json));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{authUrl}}",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation Login($input: LoginInput!) {\n  login(input: $input) {\n    token\n    tipoToken\n    expiraEmSegundos\n    usuario {\n      id\n      nome\n      email\n      perfil\n    }\n  }\n}",
+                "variables": "{\n  \"input\": {\n    \"email\": \"{{donoEmail}}\",\n    \"senha\": \"{{donoSenha}}\"\n  }\n}"
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Me (usuario autenticado)",
+          "request": {
+            "method": "POST",
+            "url": "{{authUrl}}",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query {\n  me {\n    id\n    nome\n    email\n    perfil\n    criadoEm\n  }\n}",
+                "variables": ""
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Me sem autenticacao (deve retornar erro)",
+          "request": {
+            "method": "POST",
+            "url": "{{authUrl}}",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query {\n  me {\n    id\n    nome\n    email\n  }\n}",
+                "variables": ""
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Pedidos",
+      "item": [
+        {
+          "name": "Status do Modulo (autenticado)",
+          "request": {
+            "method": "POST",
+            "url": "{{pedidoUrl}}",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query {\n  statusModuloRestaurantePedido {\n    nome\n    implementado\n    descricao\n  }\n}",
+                "variables": ""
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Criar Pedido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var json = pm.response.json();",
+                  "var pedido = json && json.data ? json.data.criarPedido : null;",
+                  "if (pedido && pedido.id) {",
+                  "    pm.collectionVariables.set('pedidoId', pedido.id);",
+                  "    console.log('pedidoId salvo:', pedido.id, '| valorTotal:', pedido.valorTotal);",
+                  "} else {",
+                  "    console.warn('pedidoId nao encontrado:', JSON.stringify(json));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{pedidoUrl}}",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation CriarPedido($input: CriarPedidoInput!) {\n  criarPedido(input: $input) {\n    id\n    clienteId\n    restauranteId\n    valorTotal\n    status\n    itens {\n      produtoId\n      nome\n      quantidade\n      preco\n      subtotal\n    }\n    createdAt\n  }\n}",
+                "variables": "{\n  \"input\": {\n    \"restauranteId\": \"{{restauranteId}}\",\n    \"itens\": [\n      {\n        \"produtoId\": \"00000000-0000-4000-8000-000000000001\",\n        \"nome\": \"X-Burger\",\n        \"quantidade\": 2,\n        \"preco\": \"25.90\"\n      },\n      {\n        \"produtoId\": \"00000000-0000-4000-8000-000000000004\",\n        \"nome\": \"Refrigerante\",\n        \"quantidade\": 1,\n        \"preco\": \"7.50\"\n      }\n    ]\n  }\n}"
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Confirmar Pedido",
+          "request": {
+            "method": "POST",
+            "url": "{{pedidoUrl}}",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation ConfirmarPedido($pedidoId: ID!) {\n  confirmarPedido(pedidoId: $pedidoId) {\n    id\n    status\n    valorTotal\n    updatedAt\n  }\n}",
+                "variables": "{\n  \"pedidoId\": \"{{pedidoId}}\"\n}"
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Pedido por ID",
+          "request": {
+            "method": "POST",
+            "url": "{{pedidoUrl}}",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query PedidoPorId($pedidoId: ID!) {\n  pedidoPorId(pedidoId: $pedidoId) {\n    id\n    clienteId\n    restauranteId\n    valorTotal\n    status\n    pagamentoId\n    motivoPendencia\n    itens {\n      produtoId\n      nome\n      quantidade\n      preco\n      subtotal\n    }\n    createdAt\n    updatedAt\n  }\n}",
+                "variables": "{\n  \"pedidoId\": \"{{pedidoId}}\"\n}"
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Meus Pedidos (cliente autenticado)",
+          "request": {
+            "method": "POST",
+            "url": "{{pedidoUrl}}",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query {\n  meusPedidos {\n    id\n    restauranteId\n    valorTotal\n    status\n    pagamentoId\n    createdAt\n  }\n}",
+                "variables": ""
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Criar Pedido sem autenticacao (deve retornar erro)",
+          "request": {
+            "method": "POST",
+            "url": "{{pedidoUrl}}",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation CriarPedido($input: CriarPedidoInput!) {\n  criarPedido(input: $input) {\n    id\n  }\n}",
+                "variables": "{\n  \"input\": {\n    \"restauranteId\": \"{{restauranteId}}\",\n    \"itens\": [\n      {\n        \"produtoId\": \"00000000-0000-4000-8000-000000000001\",\n        \"nome\": \"X-Burger\",\n        \"quantidade\": 1,\n        \"preco\": \"25.90\"\n      }\n    ]\n  }\n}"
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Pagamento",
+      "item": [
+        {
+          "name": "Pagamento por Pedido",
+          "request": {
+            "method": "POST",
+            "url": "{{pagamentoUrl}}",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query PagamentoPorPedido($pedidoId: ID!) {\n  pagamentoPorPedido(pedidoId: $pedidoId) {\n    id\n    pedidoId\n    valor\n    status\n    tentativas\n    motivoFalha\n    createdAt\n    updatedAt\n  }\n}",
+                "variables": "{\n  \"pedidoId\": \"{{pedidoId}}\"\n}"
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Pagamentos Pendentes (DONO_RESTAURANTE)",
+          "request": {
+            "method": "POST",
+            "url": "{{pagamentoUrl}}",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query {\n  pagamentosPendentes {\n    id\n    pedidoId\n    valor\n    status\n    tentativas\n    motivoFalha\n    createdAt\n  }\n}",
+                "variables": ""
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Massa de Testes",
+      "description": "Massa de testes de pedidos para o Collection Runner.\n\n**Como rodar:**\n1. Importe e selecione o environment `fiap-fase-3-restaurante`.\n2. Rode `1. Autenticacao > Login como Usuario` uma vez para popular `{{token}}`.\n3. Abra o Collection Runner (botao Run) e selecione SOMENTE esta pasta `4. Massa de Testes`.\n4. Em `Iterations`, informe quantos pedidos quer gerar (ex: 50).\n5. (Opcional) defina um `Delay` em ms entre iteracoes para suavizar a carga.\n6. Clique em `Run`. Cada iteracao cria e confirma 1 pedido com itens sorteados aleatoriamente; o Runner mostra o pass/fail das asercoes.\n\n**Cenario de resiliencia:** para gerar pedidos `PENDENTE_PAGAMENTO`, pare o gateway antes de rodar a massa:\n```\ndocker stop procpag\n```\nRode a massa no Runner e, em seguida, religue o gateway:\n```\ndocker start procpag\n```\nOs pedidos criados com o gateway fora ficam `PENDENTE_PAGAMENTO` e sao reprocessados automaticamente pelo worker quando ele volta. Consulte o resultado em `2. Pedidos > Meus Pedidos`.",
+      "item": [
+        {
+          "name": "Criar Pedido Aleatorio",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Catalogo fixo de produtos para a massa de testes.",
+                  "var catalogo = [",
+                  "    { id: '00000000-0000-4000-8000-000000000001', nome: 'X-Burger',      preco: '25.90' },",
+                  "    { id: '00000000-0000-4000-8000-000000000002', nome: 'X-Salada',      preco: '28.50' },",
+                  "    { id: '00000000-0000-4000-8000-000000000003', nome: 'Batata Frita',  preco: '15.00' },",
+                  "    { id: '00000000-0000-4000-8000-000000000004', nome: 'Refrigerante',  preco: '7.50'  },",
+                  "    { id: '00000000-0000-4000-8000-000000000005', nome: 'Suco Natural',  preco: '12.00' },",
+                  "    { id: '00000000-0000-4000-8000-000000000006', nome: 'Milk Shake',    preco: '18.90' },",
+                  "    { id: '00000000-0000-4000-8000-000000000007', nome: 'Combo Familia', preco: '89.90' },",
+                  "    { id: '00000000-0000-4000-8000-000000000008', nome: 'Sobremesa',     preco: '14.50' }",
+                  "];",
+                  "// Sorteia de 1 a 4 itens, cada um com quantidade de 1 a 3.",
+                  "var qtdItens = 1 + Math.floor(Math.random() * 4);",
+                  "var itens = [];",
+                  "for (var i = 0; i < qtdItens; i++) {",
+                  "    var p = catalogo[Math.floor(Math.random() * catalogo.length)];",
+                  "    itens.push({",
+                  "        produtoId: p.id,",
+                  "        nome: p.nome,",
+                  "        quantidade: 1 + Math.floor(Math.random() * 3),",
+                  "        preco: p.preco",
+                  "    });",
+                  "}",
+                  "pm.collectionVariables.set('itensAleatorios', JSON.stringify(itens));",
+                  "console.log('Itens sorteados:', JSON.stringify(itens));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Sem erros GraphQL', function () { pm.expect(json.errors, JSON.stringify(json.errors)).to.be.undefined; });",
+                  "pm.test('Pedido criado com ID', function () { pm.expect(json.data.criarPedido.id).to.be.a('string'); });",
+                  "pm.test('Status inicial CRIADO', function () { pm.expect(json.data.criarPedido.status).to.eql('CRIADO'); });",
+                  "pm.test('Valor total positivo', function () { pm.expect(Number(json.data.criarPedido.valorTotal)).to.be.above(0); });",
+                  "var pedido = json.data && json.data.criarPedido;",
+                  "if (pedido && pedido.id) {",
+                  "    pm.collectionVariables.set('pedidoId', pedido.id);",
+                  "    console.log('Pedido criado:', pedido.id, '| total:', pedido.valorTotal);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{pedidoUrl}}",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation CriarPedido($input: CriarPedidoInput!) {\n  criarPedido(input: $input) {\n    id\n    status\n    valorTotal\n  }\n}",
+                "variables": "{\n  \"input\": {\n    \"restauranteId\": \"{{restauranteId}}\",\n    \"itens\": {{itensAleatorios}}\n  }\n}"
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Confirmar Pedido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Sem erros GraphQL', function () { pm.expect(json.errors, JSON.stringify(json.errors)).to.be.undefined; });",
+                  "pm.test('Pedido confirmado', function () { pm.expect(json.data.confirmarPedido.status).to.eql('CONFIRMADO'); });",
+                  "var pedido = json.data && json.data.confirmarPedido;",
+                  "if (pedido) {",
+                  "    console.log('Pedido confirmado:', pedido.id, '| status:', pedido.status);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{pedidoUrl}}",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation ConfirmarPedido($pedidoId: ID!) {\n  confirmarPedido(pedidoId: $pedidoId) {\n    id\n    status\n  }\n}",
+                "variables": "{\n  \"pedidoId\": \"{{pedidoId}}\"\n}"
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

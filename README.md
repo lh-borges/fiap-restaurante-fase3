@@ -4,53 +4,263 @@ Sistema de pedido online para restaurante, dividido em microsserviços, comunica
 
 Projeto desenvolvido como **Tech Challenge da Fase 3** da PosTech FIAP. A especificação completa está em [`requisito/tech-challenge-fase-03.pdf`](../requisito/tech-challenge-fase-03.pdf).
 
----
-
-## Visão geral
-
-```
-                    +------------------+
-   Cliente HTTP --->|  usuario-auth    |  (cadastro + login + JWT RS256)
-                    +------------------+
-                            | gRPC
-                            v
-                    +-------------------+
-                    | restaurante-pedido|  produz pedido.criado
-                    +-------------------+
-                            | Kafka
-                            v
-                    +------------------+         HTTP (+ Resilience4j)
-                    |    pagamento     |  -----------------------------> procpag
-                    +------------------+   (Circuit Breaker + Retry + Timeout)
-                            | Kafka
-                            v
-              pagamento.aprovado / pagamento.pendente
-```
-
-- **Padrão arquitetural por serviço:** Hexagonal (Ports & Adapters) — `domain` puro, `application` com use cases e ports, `adapter` com inbound/outbound, `infrastructure` com configs.
-- **Autenticação:** JWT assinado em RS256. O `usuario-autenticacao` é o único emissor; os demais serviços validam usando a chave pública distribuída.
-- **Comunicação síncrona entre serviços:** gRPC (consulta de dados de usuário).
-- **Comunicação assíncrona:** Kafka, com 3 tópicos (`pedido.criado`, `pagamento.aprovado`, `pagamento.pendente`).
-- **Resiliência:** Resilience4j na chamada do `pagamento` ao gateway externo `procpag` — Circuit Breaker, Retry, Timeout e Fallback que marca o pagamento como PENDENTE e publica em `pagamento.pendente`.
+> **Para quem vai executar pela primeira vez:** comece pela seção [Como executar](#como-executar) e depois [Testar com o Postman](#testar-com-o-postman). O sistema inteiro sobe com **um único comando**.
 
 ---
 
-## Mapeamento dos requisitos da Fase 3
+## Índice
 
-| Item da spec | O que pede | Onde fica implementado |
+1. [Como executar](#como-executar)
+2. [Testar com o Postman](#testar-com-o-postman)
+3. [Arquitetura e fluxo principal](#arquitetura-e-fluxo-principal)
+4. [Requisitos da Fase 3 — o que foi feito e como validar](#requisitos-da-fase-3--o-que-foi-feito-e-como-validar)
+5. [O que ainda falta](#o-que-ainda-falta)
+6. [Serviços e portas](#serviços-e-portas)
+7. [Stack](#stack)
+8. [Estrutura do repositório](#estrutura-do-repositório)
+9. [Diagnóstico e inspeção](#diagnóstico-e-inspeção)
+
+---
+
+## Como executar
+
+### Pré-requisitos
+
+- **Docker Desktop** instalado e em execução (Docker 24+, Compose v2).
+- ~3 GB de RAM livres.
+- Portas livres no host: **8081, 8082, 8083, 8085, 8089, 9092**.
+- JDK 25 (Temurin) — **opcional**, só necessário para compilar fora do Docker.
+
+> **Se você já tem MySQL instalado nativamente** (porta 3306 ocupada): crie um `docker-compose.override.yml` na raiz (já ignorado pelo Git) com:
+> ```yaml
+> services:
+>   mysql:
+>     ports: !reset []
+> ```
+> O container continua acessível pelos demais serviços via rede interna.
+
+### 1. Subir todos os serviços
+
+A partir da raiz do projeto (`fiap-restaurante-fase3/`):
+
+```bash
+docker compose up -d --build
+```
+
+Esse único comando sobe os **8 containers** (3 aplicações + procpag + MySQL + Kafka + Zookeeper + Kafka UI).
+
+> **Primeira execução é demorada** — o Maven baixa todas as dependências dentro dos containers. Se o build falhar por instabilidade de rede, **rode o mesmo comando de novo**: o cache de dependências (BuildKit) retoma de onde parou. Execuções seguintes aproveitam o cache e sobem em segundos.
+
+### 2. Conferir se subiu
+
+```bash
+docker compose ps
+```
+
+Os 8 containers devem aparecer como `Up`; `mysql`, `kafka` e `zookeeper` com `(healthy)`.
+
+Healthcheck das aplicações:
+
+```bash
+curl http://localhost:8082/actuator/health   # restaurante-pedido  -> {"status":"UP"}
+curl http://localhost:8083/actuator/health   # pagamento           -> {"status":"UP"}
+```
+
+> O `usuario-autenticacao` não expõe Actuator — valide abrindo o GraphiQL em `http://localhost:8081/graphiql`.
+
+### 3. Parar tudo
+
+```bash
+docker compose down       # mantém o volume do MySQL
+docker compose down -v    # remove também os dados persistidos
+```
+
+---
+
+## Testar com o Postman
+
+### Onde estão os arquivos
+
+Na pasta [`docs/`](docs/):
+
+| Arquivo | Importar no Postman como |
+|---|---|
+| [`docs/fiap-fase-3-restaurante.postman_collection.json`](docs/fiap-fase-3-restaurante.postman_collection.json) | **Collection** |
+| [`docs/fiap-fase-3-restaurante.postman_environment.json`](docs/fiap-fase-3-restaurante.postman_environment.json) | **Environment** |
+
+### Como importar e configurar
+
+1. No Postman: **Import** → selecione os **dois** arquivos acima.
+2. No seletor de environment (canto superior direito), **ative o environment `fiap-fase-3-restaurante`**. Sem isso, variáveis como `{{authUrl}}` ficam vazias e as requisições falham.
+3. Pronto — a collection `fiap-fase-3-restaurante` aparece organizada em **4 pastas**.
+
+### Estrutura da collection
+
+| Pasta | Conteúdo |
+|---|---|
+| `1. Autenticacao` | Cadastrar usuário/dono, login (salva o JWT automaticamente), consultar `me` |
+| `2. Pedidos` | Status do módulo, criar/confirmar pedido, consultar por ID, listar meus pedidos |
+| `3. Pagamento` | Consultar pagamento por pedido, listar pagamentos pendentes |
+| `4. Massa de Testes` | Fluxo otimizado para o Collection Runner — gera pedidos com itens aleatórios |
+
+### Fluxo de teste manual (passo a passo)
+
+1. `1. Autenticacao` → **Login como Usuario** — o JWT é salvo automaticamente em `{{token}}`.
+2. `2. Pedidos` → **Criar Pedido** — devolve o `id` e o `valorTotal` calculado; o `pedidoId` é salvo automaticamente.
+3. `2. Pedidos` → **Confirmar Pedido** — publica o evento `pedido.criado` no Kafka.
+4. Aguarde alguns segundos e rode `2. Pedidos` → **Pedido por ID** — o status evolui para `PAGO` (ou `PENDENTE_PAGAMENTO` se o gateway falhar).
+5. `3. Pagamento` → **Pagamento por Pedido** — confirma o pagamento `APROVADO`.
+
+### Massa de testes (Collection Runner)
+
+A pasta `4. Massa de Testes` foi feita para gerar **vários pedidos com dados aleatórios**:
+
+1. Rode `1. Autenticacao` → **Login como Usuario** uma vez (popula o `{{token}}`).
+2. Abra o **Collection Runner** (botão **Run**) e selecione **somente** a pasta `4. Massa de Testes`.
+3. Em **Iterations**, informe quantos pedidos quer gerar (ex.: `50`). Opcionalmente defina um **Delay** em ms entre iterações.
+4. **Run** — cada iteração cria e confirma um pedido com itens sorteados de um catálogo; o Runner mostra o pass/fail das asserções.
+
+**Para exercitar o cenário de resiliência** (gerar pedidos `PENDENTE_PAGAMENTO`): pare o gateway antes de rodar a massa e religue depois —
+
+```bash
+docker stop procpag      # antes de rodar a massa
+docker start procpag     # depois de rodar a massa
+```
+
+Os pedidos criados com o gateway fora ficam `PENDENTE_PAGAMENTO` e são reprocessados automaticamente pelo worker quando ele volta. Confira o resultado em `2. Pedidos` → **Meus Pedidos**.
+
+---
+
+## Arquitetura e fluxo principal
+
+### Diagrama de componentes
+
+```
+   Cliente (Postman / GraphiQL)
+        |
+        | 1. cadastro + login (GraphQL)           +-----------------------+
+        +---------------------------------------> | usuario-autenticacao  | :8081
+        |  <-------------- JWT (RS256) ---------   |   emite o token JWT   |
+        |                                         +-----------------------+
+        | 2. criarPedido / confirmarPedido
+        |    (GraphQL, com JWT)
+        v
+   +----------------------+   publica pedido.criado    +-----------+
+   |  restaurante-pedido  | -------------------------> |   Kafka   |
+   |        :8082         |                            +-----------+
+   |                      |                              |      ^
+   |  consome             | <-- pagamento.aprovado ------+      | publica
+   |  pagamento.aprovado  |     pagamento.pendente              | pagamento.*
+   |  pagamento.pendente  |                                     |
+   +----------------------+                            +-----------------+
+                                                       |    pagamento    | :8083
+                                       consome         |  consome        |
+                                       pedido.criado   |  pedido.criado  |
+                                                       +-----------------+
+                                                               |
+                                          HTTP + Resilience4j   |
+                                     (Circuit Breaker / Retry /  |
+                                       Timeout / Fallback)        v
+                                                          +-------------+
+                                                          |   procpag   | :8089
+                                                          | gateway de  |
+                                                          | pagamento   |
+                                                          +-------------+
+```
+
+### Fluxo principal
+
+1. O cliente **cadastra-se** e faz **login** no `usuario-autenticacao`, que devolve um **JWT** assinado em RS256.
+2. Com o token, o cliente chama `criarPedido` no `restaurante-pedido` — o serviço calcula o `valorTotal` e devolve o pedido no status `CRIADO`. O **ID do cliente é extraído do JWT**.
+3. O cliente chama `confirmarPedido` — o pedido vai para `CONFIRMADO` e o evento **`pedido.criado`** é publicado no Kafka.
+4. O `pagamento` consome `pedido.criado` e chama o gateway externo **`procpag`** via HTTP, protegido por **Resilience4j**.
+5. **Sucesso:** o pagamento é aprovado, publica **`pagamento.aprovado`**; o `restaurante-pedido` consome e atualiza o pedido para **`PAGO`**.
+6. **Falha do gateway:** o fallback marca o pagamento como pendente e publica **`pagamento.pendente`**; o `restaurante-pedido` consome e marca o pedido como **`PENDENTE_PAGAMENTO`**.
+7. Um **worker** no `pagamento` (`@Scheduled`, a cada 30s) reprocessa os pagamentos pendentes; quando o gateway responde, o ciclo do passo 5 se completa e o pedido converge para `PAGO`.
+
+### Pontos de resiliência
+
+Todos na chamada do `pagamento` ao `procpag` (`ExternalPaymentClient` + `ProcessarPagamentoService`):
+
+- **Circuit Breaker** — abre após sequência de falhas, evitando martelar um gateway indisponível.
+- **Retry** — 3 tentativas com backoff exponencial.
+- **Timeout** — corta chamadas que não respondem em 5s.
+- **Fallback** — em qualquer falha, marca o pagamento como `PENDENTE` e publica `pagamento.pendente` (o pedido nunca falha para o cliente).
+- **Worker de reprocessamento** — drena os pendentes automaticamente quando o gateway volta.
+
+---
+
+## Requisitos da Fase 3 — o que foi feito e como validar
+
+### Requisitos funcionais
+
+| Requisito | Implementação | Como validar |
 |---|---|---|
-| 4.1 Gerenciamento de usuários | Criar e autenticar cliente | `usuario-autenticacao` (GraphQL: `cadastrarUsuario`, `login`) |
-| 4.2 Criar pedido | Pedido com cliente, restaurante e itens | `restaurante-pedido` — mutations `criarPedido` e `confirmarPedido` |
-| 4.3 Consultas | Pedido por ID e por cliente autenticado | `restaurante-pedido` — queries `pedidoPorId` e `meusPedidos` |
-| 4.4 Processamento de pagamento | Chamar `procpag` ao receber pedido | `pagamento` — `ExternalPaymentClient` → `procpag:8089/requisicao` |
-| 4.5 Pagamento pendente | Quando gateway indisponível, marcar PENDENTE e enfileirar | `pagamento` — fallback em `ProcessarPagamentoService.tentarGateway` + tópico `pagamento.pendente` |
-| 4.6 Reprocessamento automático | Worker reprocessa pendentes quando gateway volta | `pagamento` — `ReprocessamentoPagamentoWorker` (`@Scheduled` 30s) |
-| 4.7 Atualização automática de status | Após confirmação, pedido vira PAGO | Evento `pagamento.aprovado` publicado pelo `pagamento`, consumido por `restaurante-pedido` |
-| 5.1 Múltiplos serviços | Auth + pedido + pagamento separados | 3 módulos Maven independentes |
-| 5.2 Spring Security + JWT | Login emite JWT, demais serviços validam | RS256 com chave pública/privada em PEM |
-| 5.3 Kafka | 3 tópicos obrigatórios | `pedido.criado` (consumer), `pagamento.aprovado` e `pagamento.pendente` (publishers) |
-| 5.4 Resilience4j | CB + Retry + Timeout + Fallback no gateway | `pagamento` — anotações no `ExternalPaymentClient` + fallback no use case |
-| 5.5 Hexagonal | Camadas controller / use case / domain / infra | Aplicado em todos os módulos |
+| ✅ **4.1** Criar e autenticar cliente | `usuario-autenticacao` — mutations GraphQL `cadastrarUsuario` e `login` (JWT RS256) | Postman › `1. Autenticacao` › *Cadastrar Usuario* e *Login como Usuario* |
+| ✅ **4.2** Criar pedido (cliente do token, restaurante, itens, total, confirmação) | `restaurante-pedido` — mutations `criarPedido` (calcula `valorTotal`) e `confirmarPedido` | Postman › `2. Pedidos` › *Criar Pedido* (veja o `valorTotal`) e *Confirmar Pedido* |
+| ✅ **4.3** Consultar pedido por ID e listar pedidos do cliente | `restaurante-pedido` — queries `pedidoPorId` e `meusPedidos` | Postman › `2. Pedidos` › *Pedido por ID* e *Meus Pedidos* |
+| ✅ **4.4** Processar pagamento via gateway externo | `pagamento` — `ExternalPaymentClient` chama `procpag:8089/requisicao` ao consumir `pedido.criado` | Crie e confirme um pedido; depois Postman › `3. Pagamento` › *Pagamento por Pedido* → `APROVADO`. Logs: `docker logs pagamento` |
+| ✅ **4.5** Pagamento pendente quando o gateway está indisponível | Fallback do Resilience4j marca `PENDENTE` e publica `pagamento.pendente`; o pedido não falha | `docker stop procpag`, crie+confirme um pedido; consulte *Pedido por ID* → `PENDENTE_PAGAMENTO` |
+| ✅ **4.6** Reprocessamento automático | `pagamento` — `ReprocessamentoPagamentoWorker` (`@Scheduled` 30s) reprocessa pendentes | Após o teste 4.5, `docker start procpag`; aguarde ~30s e consulte *Pedido por ID* → `PAGO` |
+| ✅ **4.7** Atualização automática de status | `restaurante-pedido` consome `pagamento.aprovado`/`pagamento.pendente` e atualiza o pedido | Consulte *Pedido por ID* após o pagamento — o status muda sem intervenção manual |
+
+### Requisitos não funcionais
+
+| Requisito | Implementação | Como validar |
+|---|---|---|
+| ✅ **5.1** Arquitetura em múltiplos serviços | `usuario-autenticacao`, `restaurante-pedido`, `pagamento` — 3 módulos Maven independentes | `docker compose ps` — 3 aplicações + `procpag` + infraestrutura |
+| ✅ **5.2** Spring Security + JWT (login, perfis, endpoints protegidos, ID do token) | JWT RS256; perfis `USUARIO` (cliente) e `DONO_RESTAURANTE` (admin); `@PreAuthorize` nos resolvers; `clienteId` extraído do `subject` do token | Postman › *Me sem autenticacao* e *Criar Pedido sem autenticacao* → erro; com token → sucesso |
+| ✅ **5.3** Comunicação assíncrona com Kafka | Tópicos `pedido.criado`, `pagamento.aprovado`, `pagamento.pendente` | Kafka UI em `http://localhost:8085` — inspecione os 3 tópicos e suas mensagens |
+| ✅ **5.4** Resiliência (Resilience4j) | Circuit Breaker + Retry + Timeout + Fallback na chamada ao `procpag` | `curl http://localhost:8083/actuator/circuitbreakers`; logs mostram o CB abrindo sob falhas |
+| ✅ **5.5** Boas práticas — Clean/Hexagonal | Camadas `domain` / `application` (use cases + ports) / `adapter` (inbound/outbound) / `infrastructure` em todos os módulos | Veja [Estrutura do repositório](#estrutura-do-repositório) |
+
+### Entregáveis (item 3 da spec)
+
+| Entregável | Status | Onde |
+|---|---|---|
+| ✅ Aplicação funcionando com todos os serviços | Feito | `docker compose up -d --build` |
+| ✅ Arquivo `compose.yml` que sobe tudo num comando | Feito | [`docker-compose.yml`](docker-compose.yml) |
+| ✅ Arquivo para teste dos endpoints | Feito | Collection + environment Postman em [`docs/`](docs/) |
+| ✅ Documentação (diagrama, fluxo, pontos de resiliência) | Feito | Este README — seção [Arquitetura e fluxo principal](#arquitetura-e-fluxo-principal) |
+| ✅ Repositório com o código-fonte | Feito | Este repositório |
+| ❌ Vídeo de apresentação (até 10 min) | **Pendente** | Ainda precisa ser gravado |
+
+---
+
+## O que ainda falta
+
+| Item | Situação |
+|---|---|
+| 🎬 **Vídeo de apresentação** (até 10 min) | **Pendente** — precisa demonstrar as funcionalidades e explicar a arquitetura. Não é código; deve ser gravado antes da entrega. |
+| 🧪 **Testes automatizados** (unitários/integração) | Em andamento — cobertura sendo ampliada por outra integrante do time. Há testes mínimos de smoke nos módulos. |
+| 📐 Diagrama C4 formal *(opcional)* | A spec aceita "diagrama de componentes, sequência **ou** C4". O diagrama de componentes ASCII deste README atende o requisito; um C4 formal seria um plus. |
+| 🧩 `restaurante-service` e `api-gateway` *(opcionais)* | Marcados como **opcionais** na spec (itens 5.1) — não implementados. |
+
+---
+
+## Serviços e portas
+
+| Serviço | Porta host | Imagem / Build | Papel |
+|---|---|---|---|
+| `usuario-autenticacao` | 8081 | Spring Boot (build local) | Cadastro/login, emissão de JWT, servidor gRPC de consulta de usuário |
+| `restaurante-pedido` | 8082 | Spring Boot (build local) | Criação/confirmação/consulta de pedidos; produz `pedido.criado`, consome `pagamento.*` |
+| `pagamento` | 8083 | Spring Boot (build local) | Consome `pedido.criado`, chama o `procpag` com resiliência, publica `pagamento.*`, worker de reprocessamento |
+| `procpag` | 8089 | `docker.io/erickemprobr/procpag:latest` | **Gateway de pagamento externo (fornecido pelos professores)** — simula um serviço *eventualmente disponível*: ora autoriza, ora responde com erro/timeout |
+| `mysql` | (interno) | `mysql:8.4` | Persistência — bancos `auth_db`, `pedido_db`, `pagamento_db` criados por `init.sql` |
+| `zookeeper` | (interno) | `confluentinc/cp-zookeeper:7.4.0` | Coordenação do Kafka |
+| `kafka` | 9092 | `confluentinc/cp-kafka:7.4.0` | Broker de mensageria assíncrona |
+| `kafka-ui` | 8085 | `provectuslabs/kafka-ui:v0.7.2` | Interface web para inspecionar tópicos e mensagens |
+
+Todos os containers vivem na rede `fase3net` e se enxergam pelo nome do serviço.
+
+**Interfaces web úteis:**
+
+| URL | O que é |
+|---|---|
+| `http://localhost:8081/graphiql` | GraphiQL do `usuario-autenticacao` |
+| `http://localhost:8082/graphiql` | GraphiQL do `restaurante-pedido` |
+| `http://localhost:8083/graphiql` | GraphiQL do `pagamento` |
+| `http://localhost:8085` | Kafka UI |
 
 ---
 
@@ -67,120 +277,9 @@ Projeto desenvolvido como **Tech Challenge da Fase 3** da PosTech FIAP. A especi
 | MySQL | 8.4 |
 | gRPC | 1.68.x |
 | Resilience4j | 2.3.0 |
-| Jackson (2 para Kafka serialization) | 2.21.2 |
+| Jackson (2, para serialização Kafka) | 2.21.2 |
 | Maven | wrapper (3.9+) |
 | Docker / Docker Compose | 24+ / v2 |
-
----
-
-## Serviços
-
-| Serviço | Porta host | Tecnologia / Imagem | Papel |
-|---|---|---|---|
-| `usuario-autenticacao` | 8081 | App Spring Boot (build local) | Cadastro/login de usuários, emissão de JWT, servidor gRPC para consulta de usuário |
-| `restaurante-pedido` | 8082 | App Spring Boot (build local) | CRUD de restaurantes/produtos e pedidos, produz `pedido.criado` e consome `pagamento.*` |
-| `pagamento` | 8083 | App Spring Boot (build local) | Consome `pedido.criado`, chama procpag com resiliência, publica `pagamento.aprovado`/`pagamento.pendente`, worker de reprocessamento |
-| `procpag` | 8089 | `docker.io/erickemprobr/procpag:latest` | **Gateway de pagamento externo fornecido pelos professores** — sempre autoriza quando disponível |
-| `mysql` | (interno) | `mysql:8.4` | Persistência. Três databases criados via `init.sql`: `auth_db`, `pedido_db`, `pagamento_db` |
-| `zookeeper` | (interno) | `confluentinc/cp-zookeeper:7.4.0` | Coordenação do Kafka |
-| `kafka` | 9092 | `confluentinc/cp-kafka:7.4.0` | Broker de mensageria assíncrona |
-| `kafka-ui` | 8085 | `provectuslabs/kafka-ui:v0.7.2` | Interface web para inspecionar tópicos e mensagens |
-
-Todos os containers vivem na rede `fase3net` e se enxergam pelo nome do serviço.
-
----
-
-## Como executar
-
-### Pré-requisitos
-
-- Docker Desktop instalado e rodando
-- ~3 GB de RAM livres
-- Portas livres no host: **8081, 8082, 8083, 8085, 8089, 9092**
-- (Opcional, só para build/teste local fora do Docker): JDK 25 da Adoptium Temurin
-
-> **Atenção se você tem MySQL instalado nativamente:** a porta 3306 fica ocupada e o container `mysql` não conseguirá expor essa porta. Crie um arquivo `docker-compose.override.yml` (já ignorado pelo Git) com o conteúdo abaixo:
-> ```yaml
-> services:
->   mysql:
->     ports: !reset []
-> ```
-> Isso mantém o container acessível pelos demais serviços via rede interna sem tentar bindar no host.
-
-### Subir tudo
-
-A partir da raiz do projeto:
-
-```bash
-docker compose up -d --build
-```
-
-Na primeira execução o build é demorado (Maven baixa todas as dependências dentro dos containers). Próximas execuções aproveitam o cache.
-
-### Verificar saúde
-
-```bash
-curl http://localhost:8081/actuator/health   # usuario-autenticacao
-curl http://localhost:8082/actuator/health   # restaurante-pedido
-curl http://localhost:8083/actuator/health   # pagamento
-```
-
-Cada um deve retornar `{"status":"UP", ...}`.
-
-### Interfaces úteis
-
-| URL | O que é |
-|---|---|
-| `http://localhost:8081/graphiql` | GraphiQL do `usuario-autenticacao` |
-| `http://localhost:8082/graphiql` | GraphiQL do `restaurante-pedido` |
-| `http://localhost:8083/graphiql` | GraphiQL do `pagamento` |
-| `http://localhost:8085` | Kafka UI (inspecionar tópicos e mensagens) |
-
-### Parar tudo
-
-```bash
-docker compose down              # mantém o volume do MySQL
-docker compose down -v           # remove também os dados persistidos
-```
-
----
-
-## Testando o fluxo de pagamento (via Kafka UI ou linha de comando)
-
-Publique manualmente um evento no tópico `pedido.criado` para simular a criação de um pedido confirmado:
-
-```bash
-# via docker exec
-echo '{"pedidoId":"00000000-0000-0000-0000-000000000001","valorTotal":42.50}' \
-  | docker exec -i kafka kafka-console-producer \
-      --bootstrap-server kafka:9092 --topic pedido.criado
-```
-
-Acompanhe os logs:
-
-```bash
-docker logs -f pagamento
-```
-
-Inspecione os tópicos `pagamento.aprovado` e `pagamento.pendente` no Kafka UI em `http://localhost:8085`.
-
-Inspecione a tabela `pagamentos` no MySQL:
-
-```bash
-docker exec -it mysql mysql -uroot -proot \
-  -e "USE pagamento_db; SELECT BIN_TO_UUID(pedido_id) AS pedido_id, valor, status, tentativas FROM pagamentos;"
-```
-
-### Testar o fluxo de resiliência
-
-Pare o gateway externo e publique um novo evento — o pagamento ficará PENDENTE e o evento `pagamento.pendente` será publicado:
-
-```bash
-docker stop procpag
-# publique outro evento com pedidoId diferente, observe logs
-docker start procpag
-# em até 30s o worker de reprocessamento vira PENDENTE -> APROVADO
-```
 
 ---
 
@@ -188,52 +287,87 @@ docker start procpag
 
 ```
 fiap-restaurante-fase3/
-├── docker-compose.yml          # sobe todos os serviços
+├── docker-compose.yml          # sobe todos os serviços num comando
 ├── init.sql                    # cria os 3 databases no MySQL
 ├── pom.xml                     # parent POM multi-módulo
-├── shared/                     # stubs gRPC + BusinessException
+├── shared/                     # stubs gRPC + BusinessException compartilhada
 ├── usuario-autenticacao/       # microsserviço de cadastro/login/JWT
 ├── restaurante-pedido/         # microsserviço de pedidos
-├── pagamento/                  # microsserviço de pagamento (+ Kafka + Resilience4j)
-└── docs/                       # documentação adicional (ADRs etc.)
+├── pagamento/                  # microsserviço de pagamento (Kafka + Resilience4j)
+└── docs/
+    ├── fiap-fase-3-restaurante.postman_collection.json    # coleção de testes
+    └── fiap-fase-3-restaurante.postman_environment.json   # environment (URLs + credenciais)
 ```
 
 Cada microsserviço segue o mesmo layout interno (arquitetura hexagonal):
 
 ```
 <servico>/src/main/java/br/com/fiaprestaurante/<servico>/
-├── <Servico>Application.java                 # main Spring Boot
-├── domain/
-│   ├── entity/         # entidades puras
-│   ├── valueobject/    # value objects e enums
-│   └── exception/      # exceções de regra de negócio
+├── <Servico>Application.java   # main Spring Boot
+├── domain/                     # entidades puras, value objects, exceções de negócio
 ├── application/
-│   ├── dto/            # commands, responses, eventos
-│   ├── port/input/     # interfaces dos use cases
-│   ├── port/output/    # interfaces de repositório, mensageria, HTTP
-│   └── usecase/        # implementações dos use cases
+│   ├── dto/                    # commands, responses, eventos
+│   ├── port/input/             # interfaces dos use cases
+│   ├── port/output/            # interfaces de repositório, mensageria, HTTP
+│   └── usecase/                # implementações dos use cases
 ├── adapter/
-│   ├── inbound/        # GraphQL, Kafka consumers
-│   └── outbound/       # JPA repos, Kafka producers, HTTP clients
+│   ├── inbound/                # GraphQL controllers, Kafka consumers
+│   └── outbound/               # JPA repositories, Kafka producers, HTTP clients
 └── infrastructure/
-    ├── config/         # SecurityConfig, KafkaConfig, BeanConfig
-    └── scheduler/      # workers @Scheduled (se houver)
+    ├── config/                 # SecurityConfig, KafkaConfig, etc.
+    └── scheduler/              # workers @Scheduled (quando houver)
 ```
 
+### Contas seed
+
+Criadas automaticamente na inicialização:
+
+| E-mail | Senha | Perfil |
+|---|---|---|
+| `usuario@fiap.com` | `usuario123` | `USUARIO` (cliente) |
+| `dono@fiap.com` | `dono123` | `DONO_RESTAURANTE` (admin) |
+
 ---
 
-## Status de implementação por serviço
+## Diagnóstico e inspeção
 
-| Serviço | Estado |
-|---|---|
-| `usuario-autenticacao` | Completo (cadastro, login, JWT, servidor gRPC, seeder de dados) |
-| `pagamento` | Completo (use cases, Kafka consumer/publisher, Resilience4j, worker de reprocessamento, GraphQL de consulta, persistência MySQL) |
-| `restaurante-pedido` | Completo (criar/confirmar/consultar pedido, publica `pedido.criado`, consome `pagamento.aprovado` e `pagamento.pendente`, persistência MySQL, JWT) |
+**Logs em tempo real:**
 
----
+```bash
+docker logs -f restaurante-pedido
+docker logs -f pagamento
+docker logs -f usuario-autenticacao
+```
 
-## Documentação adicional
+**Inspecionar o estado dos pedidos no MySQL:**
 
-- ADRs em `docs/` (em construção): decisões arquiteturais (Hexagonal, Kafka, Resilience4j, JWT RS256, UUID v7).
-- JavaDoc em todas as classes e métodos do módulo `pagamento`.
-- Coleção Postman: [`docs/fiap-restaurante.postman_collection.json`](docs/fiap-restaurante.postman_collection.json).
+```bash
+docker exec -it mysql mysql -uroot -proot -e "
+USE pedido_db;
+SELECT BIN_TO_UUID(id) AS pedido, status, valor_total
+FROM pedidos ORDER BY created_at DESC LIMIT 10;"
+```
+
+**Inspecionar os pagamentos:**
+
+```bash
+docker exec -it mysql mysql -uroot -proot -e "
+USE pagamento_db;
+SELECT BIN_TO_UUID(pedido_id) AS pedido, valor, status, tentativas FROM pagamentos;"
+```
+
+**Publicar um evento `pedido.criado` manualmente** (simula um pedido sem passar pelo GraphQL):
+
+```bash
+echo '{"pedidoId":"00000000-0000-0000-0000-000000000001","valorTotal":42.50}' \
+  | docker exec -i kafka kafka-console-producer \
+      --bootstrap-server kafka:9092 --topic pedido.criado
+```
+
+**Estado do Circuit Breaker:**
+
+```bash
+curl http://localhost:8083/actuator/circuitbreakers
+```
+
+Os tópicos `pedido.criado`, `pagamento.aprovado` e `pagamento.pendente` podem ser inspecionados visualmente no **Kafka UI** (`http://localhost:8085`).
