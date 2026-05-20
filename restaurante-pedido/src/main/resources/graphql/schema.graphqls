@@ -1,6 +1,8 @@
 """
-Schema GraphQL — modulo restaurante-pedido
+Schema GraphQL — módulo restaurante-pedido
 """
+
+scalar BigDecimal
 
 type ModuloRestaurantePedido {
     nome: String!
@@ -8,7 +10,54 @@ type ModuloRestaurantePedido {
     descricao: String!
 }
 
+type ItemPedido {
+    produtoId: ID!
+    nome: String!
+    quantidade: Int!
+    preco: BigDecimal!
+    subtotal: BigDecimal!
+}
+
+type Pedido {
+    id: ID!
+    clienteId: ID!
+    restauranteId: ID!
+    itens: [ItemPedido!]!
+    valorTotal: BigDecimal!
+    status: String!
+    pagamentoId: ID
+    motivoPendencia: String
+    createdAt: String!
+    updatedAt: String!
+}
+
+input ItemPedidoInput {
+    produtoId: ID!
+    nome: String!
+    quantidade: Int!
+    preco: BigDecimal!
+}
+
+input CriarPedidoInput {
+    restauranteId: ID!
+    itens: [ItemPedidoInput!]!
+}
+
 type Query {
-    "Retorna o status do módulo restaurante/pedido. Requer autenticação."
+    "Status do módulo restaurante/pedido. Requer autenticação."
     statusModuloRestaurantePedido: ModuloRestaurantePedido
+
+    "Consulta um pedido pelo seu ID. Requer autenticação."
+    pedidoPorId(pedidoId: ID!): Pedido
+
+    "Lista todos os pedidos do cliente autenticado. Requer autenticação."
+    meusPedidos: [Pedido!]!
+}
+
+type Mutation {
+    "Cria um novo pedido para o cliente autenticado, calculando o valor total. Requer autenticação."
+    criarPedido(input: CriarPedidoInput!): Pedido!
+
+    "Confirma um pedido e publica o evento pedido.criado no Kafka. Requer autenticação."
+    confirmarPedido(pedidoId: ID!): Pedido!
 }

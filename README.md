@@ -40,8 +40,8 @@ Projeto desenvolvido como **Tech Challenge da Fase 3** da PosTech FIAP. A especi
 | Item da spec | O que pede | Onde fica implementado |
 |---|---|---|
 | 4.1 Gerenciamento de usuários | Criar e autenticar cliente | `usuario-autenticacao` (GraphQL: `cadastrarUsuario`, `login`) |
-| 4.2 Criar pedido | Pedido com cliente, restaurante e itens | `restaurante-pedido` (em desenvolvimento pelo time) |
-| 4.3 Consultas | Pedido por ID e por cliente autenticado | `restaurante-pedido` (em desenvolvimento) |
+| 4.2 Criar pedido | Pedido com cliente, restaurante e itens | `restaurante-pedido` — mutations `criarPedido` e `confirmarPedido` |
+| 4.3 Consultas | Pedido por ID e por cliente autenticado | `restaurante-pedido` — queries `pedidoPorId` e `meusPedidos` |
 | 4.4 Processamento de pagamento | Chamar `procpag` ao receber pedido | `pagamento` — `ExternalPaymentClient` → `procpag:8089/requisicao` |
 | 4.5 Pagamento pendente | Quando gateway indisponível, marcar PENDENTE e enfileirar | `pagamento` — fallback em `ProcessarPagamentoService.tentarGateway` + tópico `pagamento.pendente` |
 | 4.6 Reprocessamento automático | Worker reprocessa pendentes quando gateway volta | `pagamento` — `ReprocessamentoPagamentoWorker` (`@Scheduled` 30s) |
@@ -228,7 +228,7 @@ Cada microsserviço segue o mesmo layout interno (arquitetura hexagonal):
 |---|---|
 | `usuario-autenticacao` | Completo (cadastro, login, JWT, servidor gRPC, seeder de dados) |
 | `pagamento` | Completo (use cases, Kafka consumer/publisher, Resilience4j, worker de reprocessamento, GraphQL de consulta, persistência MySQL) |
-| `restaurante-pedido` | Em desenvolvimento (esqueleto, pendente integração Kafka com `pagamento`) |
+| `restaurante-pedido` | Completo (criar/confirmar/consultar pedido, publica `pedido.criado`, consome `pagamento.aprovado` e `pagamento.pendente`, persistência MySQL, JWT) |
 
 ---
 
