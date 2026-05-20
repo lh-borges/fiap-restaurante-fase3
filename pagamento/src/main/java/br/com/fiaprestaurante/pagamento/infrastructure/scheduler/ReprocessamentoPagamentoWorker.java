@@ -49,7 +49,7 @@ public class ReprocessamentoPagamentoWorker {
      */
     @Scheduled(
             initialDelayString = "${pagamento.reprocess.initial-delay-ms}",
-            fixedDelayString = "${pagamento.reprocess.fixed-delay-ms}"
+            fixedDelayString   = "${pagamento.reprocess.fixed-delay-ms}"
     )
     public void reprocessar() {
         try {

@@ -188,6 +188,44 @@ Todos na chamada do `pagamento` ao `procpag` (`ExternalPaymentClient` + `Process
 - **Fallback** — em qualquer falha, marca o pagamento como `PENDENTE` e publica `pagamento.pendente` (o pedido nunca falha para o cliente).
 - **Worker de reprocessamento** — drena os pendentes automaticamente quando o gateway volta.
 
+### O worker de reprocessamento (requisito 4.6)
+
+O reprocessamento automático de pagamentos pendentes é feito pelo **`ReprocessamentoPagamentoWorker`** — um componente `@Scheduled` que vive **inteiramente no microsserviço `pagamento`**.
+
+**Onde está configurado** (3 arquivos, todos no módulo `pagamento`):
+
+| Arquivo | Papel |
+|---|---|
+| `pagamento/.../PagamentoApplication.java` | `@EnableScheduling` — habilita o agendador do Spring |
+| `pagamento/.../infrastructure/scheduler/ReprocessamentoPagamentoWorker.java` | A classe do worker, com o método anotado `@Scheduled` |
+| `pagamento/src/main/resources/application.properties` | Os parâmetros do worker |
+
+```properties
+# pagamento/src/main/resources/application.properties
+pagamento.reprocess.fixed-delay-ms=30000     # intervalo entre execucoes (30s)
+pagamento.reprocess.initial-delay-ms=15000   # espera apos o startup (15s)
+pagamento.reprocess.batch-size=20            # maximo de pendentes por ciclo
+```
+
+> Essas propriedades só têm efeito no módulo `pagamento` — é lá que existe o `@Scheduled` que as lê. Declará-las em outro módulo não tem efeito algum.
+
+**Por que o worker está no `pagamento` (e não no `restaurante-pedido`)?**
+
+- **O `pagamento` é o dono do estado do pagamento.** Os registros de pagamento (`PENDENTE`/`APROVADO`) vivem no banco `pagamento_db`, que pertence ao `pagamento`. Reprocessar é varrer esses registros pendentes — uma operação sobre os dados do próprio módulo.
+- **Só o `pagamento` conhece o gateway externo (`procpag`).** Reprocessar significa "tentar de novo a chamada ao gateway"; essa integração (`ExternalPaymentClient` + Resilience4j) vive no `pagamento`. O `restaurante-pedido` não conhece — nem deveria conhecer — o `procpag`.
+- **Separação de responsabilidades (bounded context).** O `restaurante-pedido` cuida do ciclo de vida do *pedido*; o `pagamento`, do ciclo de vida do *pagamento*. Colocar o worker de pagamento no `restaurante-pedido` misturaria os dois contextos e acoplaria o serviço de pedido a detalhes de pagamento.
+- O `restaurante-pedido` apenas **reage** ao resultado: consome os eventos `pagamento.aprovado` / `pagamento.pendente` e atualiza o status do pedido.
+
+**Como isso atende o requisito 4.6 (Reprocessamento Automático):**
+
+O requisito 4.6 pede que, quando o serviço de pagamento voltar a funcionar, os pedidos pendentes sejam reprocessados **automaticamente** e, se aprovados, passem a `PAGO`. O worker cumpre exatamente isso:
+
+1. Roda **automaticamente a cada 30s**, sem nenhuma ação humana (`@Scheduled`).
+2. A cada ciclo, busca os pagamentos em `PENDENTE` (lote de até 20) e retenta a cobrança contra o `procpag`.
+3. Enquanto o gateway estiver fora, o worker falha em silêncio e tenta de novo no ciclo seguinte — **indefinidamente, sem desistir**.
+4. Quando o `procpag` volta, o pagamento é aprovado, marcado `APROVADO`, e o evento `pagamento.aprovado` é publicado no Kafka.
+5. O `restaurante-pedido` consome esse evento e atualiza o pedido para **`PAGO`** — fechando o ciclo "reprocessado → confirmado → PAGO" exigido pelo requisito.
+
 ---
 
 ## Requisitos da Fase 3 — o que foi feito e como validar
