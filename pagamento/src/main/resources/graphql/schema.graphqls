@@ -1,14 +1,22 @@
 """
-Schema GraphQL — modulo pagamento
+Schema GraphQL — módulo de pagamento
 """
 
-type ModuloPagamento {
-    nome: String!
-    implementado: Boolean!
-    descricao: String!
+type Pagamento {
+    id: ID!
+    pedidoId: ID!
+    valor: Float!
+    status: String!
+    tentativas: Int!
+    motivoFalha: String
+    createdAt: String!
+    updatedAt: String!
 }
 
 type Query {
-    "Retorna o status do módulo de pagamento. Requer autenticação."
-    statusModuloPagamento: ModuloPagamento
+    "Consulta o pagamento associado a um pedido. Requer autenticação."
+    pagamentoPorPedido(pedidoId: ID!): Pagamento
+
+    "Lista pagamentos com status PENDENTE. Requer autenticação."
+    pagamentosPendentes: [Pagamento!]!
 }

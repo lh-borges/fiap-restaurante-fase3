@@ -39,7 +39,7 @@ class RestaurantePedidoGraphQLApiTest {
                 .content("{\"query\":\"{statusModuloRestaurantePedido{nome implementado descricao}}\"}"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.statusModuloRestaurantePedido.nome").value("restaurante-pedido"))
-            .andExpect(jsonPath("$.data.statusModuloRestaurantePedido.implementado").value(false));
+            .andExpect(jsonPath("$.data.statusModuloRestaurantePedido.implementado").value(true));
     }
 
     @Test
