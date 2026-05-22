@@ -109,6 +109,20 @@ class PagamentoGraphQLApiTest {
         assertThat(response).contains("errors");
     }
 
+    @Test
+    @WithMockUser(authorities = {"USUARIO"})
+    void deveTratarPedidoIdInvalidoComoBadRequestGraphQL() throws Exception {
+        mockMvc.perform(post("/graphql")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"query":"{pagamentoPorPedido(pedidoId:\\"id-invalido\\"){id}}"}
+                                """.strip()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.pagamentoPorPedido").doesNotExist())
+                .andExpect(jsonPath("$.errors[0].message").value("Argumento invalido: Invalid UUID string: id-invalido"))
+                .andExpect(jsonPath("$.errors[0].extensions.classification").value("BAD_REQUEST"));
+    }
+
     private PagamentoJpaEntity salvarPagamento(UUID pedidoId, StatusPagamento status, String motivoFalha) {
         Instant criadoEm = Instant.parse("2026-05-21T10:00:00Z").plusSeconds(pagamentoJpaRepository.count());
         PagamentoJpaEntity pagamento = new PagamentoJpaEntity(
