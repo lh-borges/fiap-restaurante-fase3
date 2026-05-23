@@ -11,6 +11,7 @@ import br.com.fiaprestaurante.restaurantepedido.application.port.input.Consultar
 import br.com.fiaprestaurante.restaurantepedido.application.port.input.ConsultarPedidoUseCase;
 import br.com.fiaprestaurante.restaurantepedido.application.port.input.CriarPedidoUseCase;
 import br.com.fiaprestaurante.restaurantepedido.domain.exception.PedidoNaoEncontradoException;
+import br.com.fiaprestaurante.restaurantepedido.infrastructure.exception.RestaurantePedidoGraphQLExceptionHandler;
 import br.com.fiaprestaurante.shared.exception.BusinessException;
 import graphql.GraphQLError;
 import graphql.execution.ExecutionStepInfo;
@@ -138,19 +139,24 @@ class GraphQlSupportTest {
     }
 
     @Test
-    void deveResolverExcecoesDeNegocioParaErrosGraphQl() {
-        BusinessExceptionResolver resolver = new BusinessExceptionResolver();
+    void deveResolverExcecoesParaErrosGraphQlClassificados() {
+        RestaurantePedidoGraphQLExceptionHandler handler = new RestaurantePedidoGraphQLExceptionHandler();
         DataFetchingEnvironment env = ambienteGraphQl();
 
-        GraphQLError notFound = resolver.resolveToSingleError(new PedidoNaoEncontradoException("pedido não encontrado"), env);
-        GraphQLError badRequest = resolver.resolveToSingleError(new BusinessException("regra inválida"), env);
-        GraphQLError ignored = resolver.resolveToSingleError(new IllegalStateException("erro técnico"), env);
+        GraphQLError notFound = handler.handlePedidoNaoEncontrado(
+                new PedidoNaoEncontradoException("pedido não encontrado"), env);
+        GraphQLError badRequest = handler.handleBusinessException(new BusinessException("regra inválida"), env);
+        GraphQLError invalidArgument = handler.handleIllegalArgument(new IllegalArgumentException("uuid inválido"), env);
+        GraphQLError unexpected = handler.handleUnexpected(new IllegalStateException("erro técnico"), null);
 
         assertThat(notFound.getErrorType()).isEqualTo(ErrorType.NOT_FOUND);
         assertThat(notFound.getMessage()).isEqualTo("pedido não encontrado");
         assertThat(badRequest.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
         assertThat(badRequest.getMessage()).isEqualTo("regra inválida");
-        assertThat(ignored).isNull();
+        assertThat(invalidArgument.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
+        assertThat(invalidArgument.getMessage()).isEqualTo("Argumento invalido: uuid inválido");
+        assertThat(unexpected.getErrorType()).isEqualTo(ErrorType.INTERNAL_ERROR);
+        assertThat(unexpected.getMessage()).isEqualTo("Erro interno ao processar a requisicao.");
     }
 
     private RestaurantePedidoGraphQLController controller() {

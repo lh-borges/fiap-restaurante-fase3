@@ -199,6 +199,20 @@ class RestaurantePedidoGraphQLApiTest {
         assertThat(result).contains("errors");
     }
 
+    @Test
+    @WithMockUser(authorities = {"USUARIO"})
+    void deveTratarPedidoIdInvalidoComoBadRequestGraphQL() throws Exception {
+        mockMvc.perform(post("/graphql")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"query":"{pedidoPorId(pedidoId:\\"id-invalido\\"){id}}"}
+                                """.strip()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.pedidoPorId").doesNotExist())
+                .andExpect(jsonPath("$.errors[0].message").value("Argumento invalido: Invalid UUID string: id-invalido"))
+                .andExpect(jsonPath("$.errors[0].extensions.classification").value("BAD_REQUEST"));
+    }
+
     private PedidoJpaEntity salvarPedido(UUID clienteId,
                                          StatusPedido status,
                                          UUID pagamentoId,
