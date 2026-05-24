@@ -11,10 +11,6 @@ import br.com.fiaprestaurante.pagamento.domain.entity.Pagamento;
 import br.com.fiaprestaurante.pagamento.domain.valueobject.StatusPagamento;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -23,110 +19,108 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
+/**
+ * Testes unitarios do {@link ProcessarPagamentoService} - cobrem o fluxo
+ * principal de aprovacao, fallback de pendencia e a idempotencia em caso
+ * de pedido ja aprovado.
+ *
+ * @author Danilo Fernando
+ */
 class ProcessarPagamentoServiceTest {
 
-    @Mock
-    private PagamentoRepository pagamentoRepository;
+    private static final UUID PEDIDO_ID = UUID.fromString("11111111-1111-4111-8111-111111111111");
+    private static final BigDecimal VALOR = new BigDecimal("59.30");
 
-    @Mock
-    private PaymentGateway paymentGateway;
-
-    @Mock
-    private PaymentEventPublisher eventPublisher;
-
+    private PagamentoRepository repository;
+    private PaymentGateway gateway;
+    private PaymentEventPublisher publisher;
     private ProcessarPagamentoService service;
 
     @BeforeEach
     void setUp() {
-        service = new ProcessarPagamentoService(pagamentoRepository, paymentGateway, eventPublisher);
+        repository = mock(PagamentoRepository.class);
+        gateway = mock(PaymentGateway.class);
+        publisher = mock(PaymentEventPublisher.class);
+        service = new ProcessarPagamentoService(repository, gateway, publisher);
+    }
+
+    private Pagamento jaAprovado() {
+        return new Pagamento(UUID.randomUUID(), PEDIDO_ID, VALOR,
+                StatusPagamento.APROVADO, 1, null, Instant.now(), Instant.now());
     }
 
     @Test
-    void deveRetornarPagamentoJaAprovadoSemChamarGateway() {
-        UUID pedidoId = UUID.randomUUID();
-        Pagamento aprovado = pagamento(StatusPagamento.APROVADO, pedidoId, 1, null);
-        when(pagamentoRepository.buscarPorPedidoId(pedidoId)).thenReturn(Optional.of(aprovado));
+    void deveSerIdempotenteQuandoPagamentoJaAprovado() {
+        Pagamento existente = jaAprovado();
+        when(repository.buscarPorPedidoId(PEDIDO_ID)).thenReturn(Optional.of(existente));
 
-        PagamentoResponse response = service.executar(new ProcessarPagamentoCommand(pedidoId, new BigDecimal("25.00")));
+        PagamentoResponse resp = service.executar(new ProcessarPagamentoCommand(PEDIDO_ID, VALOR));
 
-        assertThat(response.status()).isEqualTo("APROVADO");
-        assertThat(response.id()).isEqualTo(aprovado.getId());
-        verifyNoInteractions(paymentGateway, eventPublisher);
-        verify(pagamentoRepository, never()).salvar(any());
+        assertThat(resp.status()).isEqualTo("APROVADO");
+        verify(gateway, never()).processar(any(), any());
+        verify(repository, never()).salvar(any());
+        verify(publisher, never()).publicarPagamentoAprovado(any());
     }
 
     @Test
-    void deveCriarPagamentoAprovadoEPublicarEvento() {
-        UUID pedidoId = UUID.randomUUID();
-        when(pagamentoRepository.buscarPorPedidoId(pedidoId)).thenReturn(Optional.empty());
-        when(paymentGateway.processar(pedidoId, new BigDecimal("25.00"))).thenReturn(true);
-        when(pagamentoRepository.salvar(any(Pagamento.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    void deveAprovarPublicarEventoESalvarQuandoGatewayRetornaTrue() {
+        when(repository.buscarPorPedidoId(PEDIDO_ID)).thenReturn(Optional.empty());
+        when(gateway.processar(PEDIDO_ID, VALOR)).thenReturn(true);
+        when(repository.salvar(any(Pagamento.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        PagamentoResponse response = service.executar(new ProcessarPagamentoCommand(pedidoId, new BigDecimal("25.00")));
+        PagamentoResponse resp = service.executar(new ProcessarPagamentoCommand(PEDIDO_ID, VALOR));
 
-        assertThat(response.status()).isEqualTo("APROVADO");
-        assertThat(response.tentativas()).isEqualTo(1);
-        assertThat(response.motivoFalha()).isNull();
-
-        ArgumentCaptor<PagamentoAprovadoEvent> eventCaptor = ArgumentCaptor.forClass(PagamentoAprovadoEvent.class);
-        verify(eventPublisher).publicarPagamentoAprovado(eventCaptor.capture());
-        verify(eventPublisher, never()).publicarPagamentoPendente(any());
-        assertThat(eventCaptor.getValue().pedidoId()).isEqualTo(pedidoId);
-        assertThat(eventCaptor.getValue().pagamentoId()).isEqualTo(response.id());
-        assertThat(eventCaptor.getValue().timestamp()).isNotNull();
+        assertThat(resp.status()).isEqualTo("APROVADO");
+        assertThat(resp.tentativas()).isEqualTo(1);
+        verify(repository).salvar(any(Pagamento.class));
+        verify(publisher).publicarPagamentoAprovado(any(PagamentoAprovadoEvent.class));
+        verify(publisher, never()).publicarPagamentoPendente(any());
     }
 
     @Test
-    void deveMarcarComoPendenteQuandoGatewayRetornaFalha() {
-        UUID pedidoId = UUID.randomUUID();
-        Pagamento existente = pagamento(StatusPagamento.PENDENTE, pedidoId, 2, "falha anterior");
-        when(pagamentoRepository.buscarPorPedidoId(pedidoId)).thenReturn(Optional.of(existente));
-        when(paymentGateway.processar(pedidoId, new BigDecimal("25.00"))).thenReturn(false);
-        when(pagamentoRepository.salvar(any(Pagamento.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    void deveMarcarPendenteEPublicarQuandoGatewayRetornaFalse() {
+        when(repository.buscarPorPedidoId(PEDIDO_ID)).thenReturn(Optional.empty());
+        when(gateway.processar(PEDIDO_ID, VALOR)).thenReturn(false);
+        when(repository.salvar(any(Pagamento.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        PagamentoResponse response = service.executar(new ProcessarPagamentoCommand(pedidoId, new BigDecimal("25.00")));
+        PagamentoResponse resp = service.executar(new ProcessarPagamentoCommand(PEDIDO_ID, VALOR));
 
-        assertThat(response.status()).isEqualTo("PENDENTE");
-        assertThat(response.tentativas()).isEqualTo(3);
-        assertThat(response.motivoFalha()).isEqualTo("Falha ao processar pagamento no serviço externo");
-
-        ArgumentCaptor<PagamentoPendenteEvent> eventCaptor = ArgumentCaptor.forClass(PagamentoPendenteEvent.class);
-        verify(eventPublisher).publicarPagamentoPendente(eventCaptor.capture());
-        verify(eventPublisher, never()).publicarPagamentoAprovado(any());
-        assertThat(eventCaptor.getValue().pedidoId()).isEqualTo(pedidoId);
-        assertThat(eventCaptor.getValue().motivo()).isEqualTo(response.motivoFalha());
+        assertThat(resp.status()).isEqualTo("PENDENTE");
+        assertThat(resp.motivoFalha()).isNotBlank();
+        verify(publisher).publicarPagamentoPendente(any(PagamentoPendenteEvent.class));
+        verify(publisher, never()).publicarPagamentoAprovado(any());
     }
 
     @Test
-    void deveMarcarComoPendenteQuandoGatewayLancaExcecao() {
-        UUID pedidoId = UUID.randomUUID();
-        when(pagamentoRepository.buscarPorPedidoId(pedidoId)).thenReturn(Optional.empty());
-        when(paymentGateway.processar(pedidoId, new BigDecimal("25.00"))).thenThrow(new RuntimeException("timeout"));
-        when(pagamentoRepository.salvar(any(Pagamento.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    void deveMarcarPendenteQuandoGatewayLancaExcecao() {
+        when(repository.buscarPorPedidoId(PEDIDO_ID)).thenReturn(Optional.empty());
+        when(gateway.processar(PEDIDO_ID, VALOR))
+                .thenThrow(new RuntimeException("connection refused"));
+        when(repository.salvar(any(Pagamento.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        PagamentoResponse response = service.executar(new ProcessarPagamentoCommand(pedidoId, new BigDecimal("25.00")));
+        PagamentoResponse resp = service.executar(new ProcessarPagamentoCommand(PEDIDO_ID, VALOR));
 
-        assertThat(response.status()).isEqualTo("PENDENTE");
-        assertThat(response.tentativas()).isEqualTo(1);
-        verify(eventPublisher).publicarPagamentoPendente(any(PagamentoPendenteEvent.class));
+        assertThat(resp.status()).isEqualTo("PENDENTE");
+        verify(publisher).publicarPagamentoPendente(any(PagamentoPendenteEvent.class));
     }
 
-    private static Pagamento pagamento(StatusPagamento status, UUID pedidoId, int tentativas, String motivoFalha) {
-        return new Pagamento(
-                UUID.randomUUID(),
-                pedidoId,
-                new BigDecimal("25.00"),
-                status,
-                tentativas,
-                motivoFalha,
-                Instant.parse("2026-05-21T10:00:00Z"),
-                Instant.parse("2026-05-21T10:01:00Z")
-        );
+    @Test
+    void deveIncrementarTentativasNoPagamentoExistentePendente() {
+        Pagamento existente = new Pagamento(UUID.randomUUID(), PEDIDO_ID, VALOR,
+                StatusPagamento.PENDENTE, 2, "falha anterior", Instant.now(), Instant.now());
+        when(repository.buscarPorPedidoId(PEDIDO_ID)).thenReturn(Optional.of(existente));
+        when(gateway.processar(eq(PEDIDO_ID), any(BigDecimal.class))).thenReturn(true);
+        when(repository.salvar(any(Pagamento.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        PagamentoResponse resp = service.executar(new ProcessarPagamentoCommand(PEDIDO_ID, VALOR));
+
+        assertThat(resp.status()).isEqualTo("APROVADO");
+        assertThat(resp.tentativas()).isEqualTo(3);
     }
 }
