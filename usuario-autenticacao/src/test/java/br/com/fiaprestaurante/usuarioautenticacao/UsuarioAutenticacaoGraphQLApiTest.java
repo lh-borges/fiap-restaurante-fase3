@@ -13,6 +13,7 @@ import org.springframework.web.context.WebApplicationContext;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -71,6 +72,29 @@ class UsuarioAutenticacaoGraphQLApiTest {
             .andReturn().getResponse().getContentAsString();
 
         assertThat(result).contains("errors");
+    }
+
+    @Test
+    void deveTratarCredenciaisInvalidasComoUnauthorizedGraphQL() throws Exception {
+        mockMvc.perform(post("/graphql")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"query":"mutation{login(input:{email:\\"naoexiste@fiap.com\\",senha:\\"errada\\"}){token}}"}
+                    """.strip()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.errors[0].message").value("Credenciais inválidas."))
+            .andExpect(jsonPath("$.errors[0].extensions.classification").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    void deveTratarSubjectJwtInvalidoComoBadRequestGraphQL() throws Exception {
+        mockMvc.perform(post("/graphql")
+                .with(jwt().jwt(token -> token.subject("subject-invalido")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"query\":\"{me{id nome email}}\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.errors[0].message").value("Argumento invalido: Invalid UUID string: subject-invalido"))
+            .andExpect(jsonPath("$.errors[0].extensions.classification").value("BAD_REQUEST"));
     }
 
     // --- helpers ---
