@@ -5,69 +5,92 @@ import br.com.fiaprestaurante.pagamento.application.dto.ProcessarPagamentoComman
 import br.com.fiaprestaurante.pagamento.application.port.input.ProcessarPagamentoUseCase;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
+/**
+ * Testes unitarios do {@link PedidoCriadoConsumer} - cobre payload
+ * valido, descarte de payload invalido, propagacao de falha tecnica.
+ *
+ * @author Danilo Fernando
+ */
 class PedidoCriadoConsumerTest {
 
-    @Mock
-    private ProcessarPagamentoUseCase processarPagamento;
+    private static final UUID PEDIDO_ID = UUID.fromString("11111111-1111-4111-8111-111111111111");
 
+    private ProcessarPagamentoUseCase useCase;
     private PedidoCriadoConsumer consumer;
 
     @BeforeEach
     void setUp() {
-        consumer = new PedidoCriadoConsumer(processarPagamento);
+        useCase = mock(ProcessarPagamentoUseCase.class);
+        consumer = new PedidoCriadoConsumer(useCase);
+    }
+
+    private Map<String, Object> eventoValido() {
+        Map<String, Object> e = new HashMap<>();
+        e.put("pedidoId", PEDIDO_ID.toString());
+        e.put("valorTotal", 59.30);
+        e.put("timestamp", Instant.now().toString());
+        return e;
     }
 
     @Test
-    void deveProcessarPayloadValido() {
-        UUID pedidoId = UUID.randomUUID();
-        when(processarPagamento.executar(new ProcessarPagamentoCommand(pedidoId, new BigDecimal("35.50"))))
-                .thenReturn(response(pedidoId));
+    void deveExtrairPedidoIdEValorTotalEDelegarAoUseCase() {
+        when(useCase.executar(any(ProcessarPagamentoCommand.class)))
+                .thenReturn(new PagamentoResponse(UUID.randomUUID(), PEDIDO_ID,
+                        new BigDecimal("59.30"), "APROVADO", 1, null,
+                        Instant.now(), Instant.now()));
 
-        consumer.consumir(Map.of("pedidoId", pedidoId.toString(), "valorTotal", "35.50"));
+        consumer.consumir(eventoValido());
 
-        ArgumentCaptor<ProcessarPagamentoCommand> captor = ArgumentCaptor.forClass(ProcessarPagamentoCommand.class);
-        verify(processarPagamento).executar(captor.capture());
-        assertThat(captor.getValue().pedidoId()).isEqualTo(pedidoId);
-        assertThat(captor.getValue().valorTotal()).isEqualByComparingTo("35.50");
+        ArgumentCaptor<ProcessarPagamentoCommand> captor =
+                ArgumentCaptor.forClass(ProcessarPagamentoCommand.class);
+        verify(useCase).executar(captor.capture());
+        assertThat(captor.getValue().pedidoId()).isEqualTo(PEDIDO_ID);
+        assertThat(captor.getValue().valorTotal()).isEqualByComparingTo("59.30");
     }
 
     @Test
-    void deveDescartarPayloadInvalido() {
-        consumer.consumir(Map.of("pedidoId", "uuid-invalido", "valorTotal", "35.50"));
+    void payloadInvalidoDeveSerDescartadoSemPropagar() {
+        Map<String, Object> ruim = new HashMap<>();
+        ruim.put("pedidoId", "nao-eh-uuid");
+        ruim.put("valorTotal", 10);
 
-        verifyNoInteractions(processarPagamento);
+        consumer.consumir(ruim);
+
+        verify(useCase, never()).executar(any());
     }
 
     @Test
-    void devePropagarErroDoUseCase() {
-        UUID pedidoId = UUID.randomUUID();
-        when(processarPagamento.executar(new ProcessarPagamentoCommand(pedidoId, new BigDecimal("35.50"))))
-                .thenThrow(new IllegalStateException("falha de persistencia"));
+    void faltaDePedidoIdDeveSerDescartado() {
+        Map<String, Object> ruim = new HashMap<>();
+        ruim.put("valorTotal", 10);
 
-        assertThatThrownBy(() -> consumer.consumir(Map.of("pedidoId", pedidoId.toString(), "valorTotal", "35.50")))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("falha de persistencia");
+        consumer.consumir(ruim);
+
+        verify(useCase, never()).executar(any());
     }
 
-    private static PagamentoResponse response(UUID pedidoId) {
-        return new PagamentoResponse(UUID.randomUUID(), pedidoId, new BigDecimal("35.50"), "APROVADO", 1, null,
-                Instant.parse("2026-05-21T10:00:00Z"), Instant.parse("2026-05-21T10:01:00Z"));
+    @Test
+    void falhaTecnicaDoUseCaseDevePropagar() {
+        when(useCase.executar(any(ProcessarPagamentoCommand.class)))
+                .thenThrow(new RuntimeException("erro de banco"));
+
+        assertThatThrownBy(() -> consumer.consumir(eventoValido()))
+                .isInstanceOf(RuntimeException.class);
     }
 }

@@ -12,13 +12,14 @@ Projeto desenvolvido como **Tech Challenge da Fase 3** da PosTech FIAP. A especi
 
 1. [Como executar](#como-executar)
 2. [Testar com o Postman](#testar-com-o-postman)
-3. [Arquitetura e fluxo principal](#arquitetura-e-fluxo-principal)
-4. [Requisitos da Fase 3 — o que foi feito e como validar](#requisitos-da-fase-3--o-que-foi-feito-e-como-validar)
-5. [O que ainda falta](#o-que-ainda-falta)
-6. [Serviços e portas](#serviços-e-portas)
-7. [Stack](#stack)
-8. [Estrutura do repositório](#estrutura-do-repositório)
-9. [Diagnóstico e inspeção](#diagnóstico-e-inspeção)
+3. [Testes automatizados](#testes-automatizados)
+4. [Arquitetura e fluxo principal](#arquitetura-e-fluxo-principal)
+5. [Requisitos da Fase 3 — o que foi feito e como validar](#requisitos-da-fase-3--o-que-foi-feito-e-como-validar)
+6. [O que ainda falta](#o-que-ainda-falta)
+7. [Serviços e portas](#serviços-e-portas)
+8. [Stack](#stack)
+9. [Estrutura do repositório](#estrutura-do-repositório)
+10. [Diagnóstico e inspeção](#diagnóstico-e-inspeção)
 
 ---
 
@@ -128,6 +129,97 @@ docker start procpag     # depois de rodar a massa
 ```
 
 Os pedidos criados com o gateway fora ficam `PENDENTE_PAGAMENTO` e são reprocessados automaticamente pelo worker quando ele volta. Confira o resultado em `2. Pedidos` → **Meus Pedidos**.
+
+---
+
+## Testes automatizados
+
+A suíte unitária + smoke cobre as três aplicações com **~152 testes** e roda em ~30s. **Não exige Docker, MySQL nem Kafka externos** — usa H2 em memória, `@EmbeddedKafka` e mocks nas dependências.
+
+### Cobertura atual por módulo
+
+| Módulo | Testes | O que cobre |
+|---|---|---|
+| `usuario-autenticacao` | 31 | Domain + use cases (cadastrar, autenticar, buscar) + BCrypt + JwtTokenProvider + controllers GraphQL e gRPC + mapper + payloads |
+| `restaurante-pedido` | 77 | Domain (Pedido/ItemPedido com invariantes e transições) + use cases + adapters JPA, Kafka e GraphQL + consumers + smoke de contexto |
+| `pagamento` | 44 | Domain + use cases (processar, reprocessar, consultar) + ExternalPaymentClient + adapters Kafka/JPA/GraphQL + worker `@Scheduled` |
+| **Total** | **152** | |
+
+### Rodar tudo
+
+A partir da raiz do projeto:
+
+```bash
+./mvnw test            # roda os 4 módulos
+```
+
+> ⚠️ **O Maven Surefire mostra `Tests run: N` por módulo, mas não agrega no Reactor Summary.** O número que aparece no fim é só do último módulo executado. Para ver o total agregado, use o script abaixo.
+
+### Resumo agregado (script)
+
+Para ter um relatório consolidado com totais por módulo + total agregado, use os scripts em [`scripts/`](scripts/):
+
+| SO | Comando |
+|---|---|
+| Linux / macOS | `./scripts/test-summary.sh` |
+| Windows (PowerShell) | `.\scripts\test-summary.ps1` |
+
+Saída:
+
+```
+============================================================
+ RESUMO POR MODULO
+============================================================
+  pagamento                 tests:   44   falhas: 0   erros: 0   skip: 0   tempo:  10,96s
+  restaurante-pedido        tests:   77   falhas: 0   erros: 0   skip: 0   tempo:  10,53s
+  usuario-autenticacao      tests:   31   falhas: 0   erros: 0   skip: 0   tempo:   7,40s
+
+============================================================
+ TOTAL AGREGADO
+============================================================
+  Tests run:  152
+  Failures:   0
+  Errors:     0
+  Skipped:    0
+  Tempo:      28,89s
+```
+
+Linhas em **verde** se o módulo passou, **vermelhas** se houve falha/erro. O exit code é `1` se algum teste falhou — pronto para CI.
+
+**Opções dos scripts:**
+
+| Linux/macOS | Windows | Efeito |
+|---|---|---|
+| `--quiet` ou `-q` | `-Quiet` | Roda o Maven com `-q` (saída reduzida) |
+| `--skip-build` | `-SkipBuild` | Pula o `mvn test` e só lê os XMLs existentes (útil quando o build já rodou) |
+| `--help` ou `-h` | `Get-Help .\scripts\test-summary.ps1` | Mostra ajuda |
+
+> Se a Execution Policy do PowerShell bloquear, rode via:
+> ```powershell
+> powershell -ExecutionPolicy Bypass -File .\scripts\test-summary.ps1
+> ```
+
+### Rodar testes de um único módulo
+
+```bash
+./mvnw -pl restaurante-pedido -am test    # só restaurante-pedido (compila shared antes)
+./mvnw -pl pagamento -am test             # só pagamento
+./mvnw -pl usuario-autenticacao -am test  # só auth
+```
+
+### Stack de testes
+
+- **JUnit 5** (Jupiter) — runner
+- **AssertJ** — fluent assertions
+- **Mockito** — mocks dos colaboradores
+- **Spring Boot Test** + `@SpringBootTest` — testes de contexto (smoke)
+- **H2** in-memory + `MODE=MySQL` — substitui o MySQL nos testes
+- **`@EmbeddedKafka`** — broker Kafka iniciado pelo próprio teste
+- **Spring Security Test** + `@WithMockUser` — autenticação simulada
+
+### Como o script de resumo funciona
+
+Cada execução do Maven Surefire grava um XML por classe de teste em `<modulo>/target/surefire-reports/TEST-*.xml` no formato JUnit padrão. O script percorre todos esses XMLs, soma os atributos do `<testsuite>` (`tests`, `failures`, `errors`, `skipped`, `time`) e imprime o agregado. Não há dependência externa — o `.sh` usa só `find`/`grep`/`sed`/`awk` e o `.ps1` usa `[xml]` do PowerShell.
 
 ---
 
@@ -332,9 +424,12 @@ fiap-restaurante-fase3/
 ├── usuario-autenticacao/       # microsserviço de cadastro/login/JWT
 ├── restaurante-pedido/         # microsserviço de pedidos
 ├── pagamento/                  # microsserviço de pagamento (Kafka + Resilience4j)
-└── docs/
-    ├── fiap-fase-3-restaurante.postman_collection.json    # coleção de testes
-    └── fiap-fase-3-restaurante.postman_environment.json   # environment (URLs + credenciais)
+├── docs/
+│   ├── fiap-fase-3-restaurante.postman_collection.json    # coleção de testes
+│   └── fiap-fase-3-restaurante.postman_environment.json   # environment (URLs + credenciais)
+└── scripts/
+    ├── test-summary.sh         # roda mvn test e imprime resumo agregado (Linux/macOS)
+    └── test-summary.ps1        # idem para Windows (PowerShell)
 ```
 
 Cada microsserviço segue o mesmo layout interno (arquitetura hexagonal):
