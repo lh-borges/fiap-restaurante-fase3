@@ -109,23 +109,35 @@ class RestaurantePedidoGraphQLControllerTest {
     }
 
     @Test
-    void pedidoPorIdDeveRetornarRespostaQuandoExistir() {
-        when(consultarPedido.porId(PEDIDO_ID))
+    void pedidoPorIdDeveRetornarRespostaQuandoExistirEPertencerAoCliente() {
+        when(consultarPedido.porId(PEDIDO_ID, CLIENTE_ID))
                 .thenReturn(Optional.of(pedidoExemplo("PAGO")));
 
         PedidoResponse resposta = controller.pedidoPorId(PEDIDO_ID.toString());
 
         assertThat(resposta).isNotNull();
         assertThat(resposta.status()).isEqualTo("PAGO");
+        verify(consultarPedido).porId(PEDIDO_ID, CLIENTE_ID);
     }
 
     @Test
     void pedidoPorIdDeveRetornarNullQuandoNaoExistir() {
-        when(consultarPedido.porId(PEDIDO_ID)).thenReturn(Optional.empty());
+        when(consultarPedido.porId(PEDIDO_ID, CLIENTE_ID)).thenReturn(Optional.empty());
 
         PedidoResponse resposta = controller.pedidoPorId(PEDIDO_ID.toString());
 
         assertThat(resposta).isNull();
+    }
+
+    @Test
+    void pedidoPorIdDeveRetornarNullQuandoForDeOutroCliente() {
+        // service ja filtra por ownership (retorna empty) — controller so propaga
+        when(consultarPedido.porId(PEDIDO_ID, CLIENTE_ID)).thenReturn(Optional.empty());
+
+        PedidoResponse resposta = controller.pedidoPorId(PEDIDO_ID.toString());
+
+        assertThat(resposta).isNull();
+        verify(consultarPedido).porId(PEDIDO_ID, CLIENTE_ID);
     }
 
     @Test

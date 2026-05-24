@@ -134,16 +134,16 @@ Os pedidos criados com o gateway fora ficam `PENDENTE_PAGAMENTO` e são reproces
 
 ## Testes automatizados
 
-A suíte unitária + smoke cobre as três aplicações com **~152 testes** e roda em ~30s. **Não exige Docker, MySQL nem Kafka externos** — usa H2 em memória, `@EmbeddedKafka` e mocks nas dependências.
+A suíte unitária + smoke cobre as três aplicações com **233 testes** e roda em ~40s. **Não exige Docker, MySQL nem Kafka externos** — usa H2 em memória, `@EmbeddedKafka` e mocks nas dependências.
 
 ### Cobertura atual por módulo
 
 | Módulo | Testes | O que cobre |
 |---|---|---|
-| `usuario-autenticacao` | 31 | Domain + use cases (cadastrar, autenticar, buscar) + BCrypt + JwtTokenProvider + controllers GraphQL e gRPC + mapper + payloads |
-| `restaurante-pedido` | 77 | Domain (Pedido/ItemPedido com invariantes e transições) + use cases + adapters JPA, Kafka e GraphQL + consumers + smoke de contexto |
-| `pagamento` | 44 | Domain + use cases (processar, reprocessar, consultar) + ExternalPaymentClient + adapters Kafka/JPA/GraphQL + worker `@Scheduled` |
-| **Total** | **152** | |
+| `usuario-autenticacao` | 63 | Domain (`Usuario`, `PerfilUsuario`, exceções) + use cases (cadastrar, autenticar, buscar) + BCrypt + `JwtTokenProvider` + controller GraphQL + `UsuarioGraphQLExceptionHandler` + `UsuarioMapper` + payloads + adapter gRPC + `DataSeeder` + smoke de contexto + smoke GraphQL |
+| `restaurante-pedido` | 113 | Domain (`Pedido`/`ItemPedido` com invariantes, transições e ownership) + use cases (criar, confirmar, consultar com filtro por dono, atualizar status) + adapters JPA, Kafka e GraphQL + `RestaurantePedidoGraphQLExceptionHandler` + consumers `pagamento.aprovado`/`pagamento.pendente` + `AuthenticatedUser` + smoke de contexto + smoke GraphQL (8 cenários) |
+| `pagamento` | 57 | Domain (`Pagamento`, `StatusPagamento`, exceções) + use cases (processar, reprocessar, consultar) + `ExternalPaymentClient` + adapters Kafka/JPA/GraphQL + `PagamentoGraphQLExceptionHandler` + worker `@Scheduled` + configs (Bean/Kafka/Security) + smoke de contexto + smoke GraphQL |
+| **Total** | **233** | |
 
 ### Rodar tudo
 
@@ -170,18 +170,18 @@ Saída:
 ============================================================
  RESUMO POR MODULO
 ============================================================
-  pagamento                 tests:   44   falhas: 0   erros: 0   skip: 0   tempo:  10,96s
-  restaurante-pedido        tests:   77   falhas: 0   erros: 0   skip: 0   tempo:  10,53s
-  usuario-autenticacao      tests:   31   falhas: 0   erros: 0   skip: 0   tempo:   7,40s
+  pagamento                 tests:   57   falhas: 0   erros: 0   skip: 0   tempo:  14,92s
+  restaurante-pedido        tests:  113   falhas: 0   erros: 0   skip: 0   tempo:  13,85s
+  usuario-autenticacao      tests:   63   falhas: 0   erros: 0   skip: 0   tempo:  10,65s
 
 ============================================================
  TOTAL AGREGADO
 ============================================================
-  Tests run:  152
+  Tests run:  233
   Failures:   0
   Errors:     0
   Skipped:    0
-  Tempo:      28,89s
+  Tempo:      39,42s
 ```
 
 Linhas em **verde** se o módulo passou, **vermelhas** se houve falha/erro. O exit code é `1` se algum teste falhou — pronto para CI.
@@ -328,7 +328,7 @@ O requisito 4.6 pede que, quando o serviço de pagamento voltar a funcionar, os 
 |---|---|---|
 | ✅ **4.1** Criar e autenticar cliente | `usuario-autenticacao` — mutations GraphQL `cadastrarUsuario` e `login` (JWT RS256) | Postman › `1. Autenticacao` › *Cadastrar Usuario* e *Login como Usuario* |
 | ✅ **4.2** Criar pedido (cliente do token, restaurante, itens, total, confirmação) | `restaurante-pedido` — mutations `criarPedido` (calcula `valorTotal`) e `confirmarPedido` | Postman › `2. Pedidos` › *Criar Pedido* (veja o `valorTotal`) e *Confirmar Pedido* |
-| ✅ **4.3** Consultar pedido por ID e listar pedidos do cliente | `restaurante-pedido` — queries `pedidoPorId` e `meusPedidos` | Postman › `2. Pedidos` › *Pedido por ID* e *Meus Pedidos* |
+| ✅ **4.3** Consultar pedido por ID e listar pedidos do cliente | `restaurante-pedido` — queries `pedidoPorId` (com **verificação de ownership** — só retorna se o pedido pertencer ao cliente do JWT) e `meusPedidos` | Postman › `2. Pedidos` › *Pedido por ID* e *Meus Pedidos*. Tentar consultar pedido alheio retorna `null` |
 | ✅ **4.4** Processar pagamento via gateway externo | `pagamento` — `ExternalPaymentClient` chama `procpag:8089/requisicao` ao consumir `pedido.criado` | Crie e confirme um pedido; depois Postman › `3. Pagamento` › *Pagamento por Pedido* → `APROVADO`. Logs: `docker logs pagamento` |
 | ✅ **4.5** Pagamento pendente quando o gateway está indisponível | Fallback do Resilience4j marca `PENDENTE` e publica `pagamento.pendente`; o pedido não falha | `docker stop procpag`, crie+confirme um pedido; consulte *Pedido por ID* → `PENDENTE_PAGAMENTO` |
 | ✅ **4.6** Reprocessamento automático | `pagamento` — `ReprocessamentoPagamentoWorker` (`@Scheduled` 30s) reprocessa pendentes | Após o teste 4.5, `docker start procpag`; aguarde ~30s e consulte *Pedido por ID* → `PAGO` |
@@ -361,10 +361,11 @@ O requisito 4.6 pede que, quando o serviço de pagamento voltar a funcionar, os 
 
 | Item | Situação |
 |---|---|
-| 🎬 **Vídeo de apresentação** (até 10 min) | **Pendente** — precisa demonstrar as funcionalidades e explicar a arquitetura. Não é código; deve ser gravado antes da entrega. |
-| 🧪 **Testes automatizados** (unitários/integração) | Em andamento — cobertura sendo ampliada por outra integrante do time. Há testes mínimos de smoke nos módulos. |
+| 🎬 **Vídeo de apresentação** (até 10 min) | **Pendente — única entrega bloqueante** restante. Precisa demonstrar as funcionalidades e explicar a arquitetura. Não é código; deve ser gravado antes da entrega. |
+| 🧹 Limpeza de testes duplicados *(opcional)* | Após o merge de duas branches de testes em paralelo, alguns use cases têm versão "consolidada" (ex.: `PedidoUseCaseServiceTest`) coexistindo com versão "granular" (ex.: `CriarPedidoServiceTest` + `ConfirmarPedidoServiceTest` + ...). Funciona; só duplica execução. Pode ser limpado num PR à parte. |
 | 📐 Diagrama C4 formal *(opcional)* | A spec aceita "diagrama de componentes, sequência **ou** C4". O diagrama de componentes ASCII deste README atende o requisito; um C4 formal seria um plus. |
-| 🧩 `restaurante-service` e `api-gateway` *(opcionais)* | Marcados como **opcionais** na spec (itens 5.1) — não implementados. |
+| 🐳 Revisão dos Dockerfiles *(opcional)* | Funciona e usa BuildKit cache mount; pode evoluir com healthchecks dos apps, JVM tuning explícito, secrets via Docker Compose. |
+| 🧩 `restaurante-service` e `api-gateway` *(opcionais)* | Marcados como **opcionais** na spec (item 5.1) — não implementados. Decisão consciente: o mínimo já está atendido. |
 
 ---
 

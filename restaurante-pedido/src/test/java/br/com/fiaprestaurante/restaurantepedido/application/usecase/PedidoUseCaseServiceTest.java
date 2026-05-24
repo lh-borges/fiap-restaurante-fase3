@@ -62,7 +62,7 @@ class PedidoUseCaseServiceTest {
         when(pedidoRepository.buscarPorId(TestFixtures.PEDIDO_ID)).thenReturn(Optional.of(pedido));
         when(pedidoRepository.listarPorCliente(TestFixtures.CLIENTE_ID)).thenReturn(List.of(pedido));
 
-        assertThat(service.porId(TestFixtures.PEDIDO_ID)).get()
+        assertThat(service.porId(TestFixtures.PEDIDO_ID, TestFixtures.CLIENTE_ID)).get()
                 .extracting(PedidoResponse::id)
                 .isEqualTo(TestFixtures.PEDIDO_ID);
         assertThat(service.porCliente(TestFixtures.CLIENTE_ID)).singleElement()

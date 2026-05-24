@@ -17,12 +17,18 @@ import java.util.UUID;
 public interface ConsultarPedidoUseCase {
 
     /**
-     * Busca um pedido pelo seu identificador.
+     * Busca um pedido pelo seu identificador, garantindo que ele pertence
+     * ao cliente autenticado (privacidade).
      *
-     * @param pedidoId identificador do pedido
-     * @return {@link Optional} com o pedido, ou vazio se não encontrado
+     * <p>Retorna {@link Optional#empty()} se o pedido não existir <strong>ou</strong>
+     * se ele existir mas pertencer a outro cliente — em ambos os casos a
+     * resposta é a mesma para não vazar a existência do pedido.
+     *
+     * @param pedidoId  identificador do pedido
+     * @param clienteId identificador do cliente autenticado (extraído do JWT)
+     * @return {@link Optional} com o pedido, ou vazio se não encontrado ou de outro cliente
      */
-    Optional<PedidoResponse> porId(UUID pedidoId);
+    Optional<PedidoResponse> porId(UUID pedidoId, UUID clienteId);
 
     /**
      * Lista todos os pedidos do cliente informado, em ordem decrescente de
