@@ -120,7 +120,7 @@ class GraphQlSupportTest {
     void deveConsultarPedidoPorIdMeusPedidosEStatusDoModulo() {
         RestaurantePedidoGraphQLController controller = controller();
         PedidoResponse esperado = PedidoResponse.from(TestFixtures.pedidoCriado());
-        when(consultarPedido.porId(TestFixtures.PEDIDO_ID)).thenReturn(Optional.of(esperado));
+        when(consultarPedido.porId(TestFixtures.PEDIDO_ID, TestFixtures.CLIENTE_ID)).thenReturn(Optional.of(esperado));
         when(consultarPedido.porCliente(TestFixtures.CLIENTE_ID)).thenReturn(List.of(esperado));
         when(consultarModulo.executar()).thenReturn("operacional");
         autenticar(TestFixtures.CLIENTE_ID.toString());
@@ -133,7 +133,8 @@ class GraphQlSupportTest {
     @Test
     void deveRetornarNullQuandoPedidoPorIdNaoForEncontrado() {
         RestaurantePedidoGraphQLController controller = controller();
-        when(consultarPedido.porId(TestFixtures.PEDIDO_ID)).thenReturn(Optional.empty());
+        when(consultarPedido.porId(TestFixtures.PEDIDO_ID, TestFixtures.CLIENTE_ID)).thenReturn(Optional.empty());
+        autenticar(TestFixtures.CLIENTE_ID.toString());
 
         assertThat(controller.pedidoPorId(TestFixtures.PEDIDO_ID.toString())).isNull();
     }
