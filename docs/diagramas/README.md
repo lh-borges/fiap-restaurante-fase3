@@ -16,7 +16,9 @@ versionamento granular.
 
 | Fonte | Imagem | Tipo | O que mostra |
 |---|---|---|---|
-| [componentes.md](componentes.md) | [componentes.png](componentes.png) | Componentes (C4 nível 2) | 4 microsserviços + infra + procpag + cliente |
+| [c4-contexto.md](c4-contexto.md) | [c4-contexto.png](c4-contexto.png) | **C4 nível 1 (Contexto)** | Sistema visto de fora: atores e sistemas externos |
+| [c4-containers.md](c4-containers.md) | [c4-containers.png](c4-containers.png) | **C4 nível 2 (Containers)** | Topologia técnica: 4 apps Spring + MySQL + Kafka + procpag + protocolos |
+| [componentes.md](componentes.md) | [componentes.png](componentes.png) | Componentes (visão lógica) | Detalhamento de eventos Kafka + ligações |
 | [sequencia-happy-path.md](sequencia-happy-path.md) | [sequencia-happy-path.png](sequencia-happy-path.png) | Sequência | Fluxo feliz: cadastro → login → criar pedido → confirmar → PAGO → cozinha → PRONTO |
 | [sequencia-resiliencia.md](sequencia-resiliencia.md) | [sequencia-resiliencia.png](sequencia-resiliencia.png) | Sequência | Fluxo de falha do gateway: pagamento pendente + reprocessamento automático |
 | [maquina-estados-pedido.md](maquina-estados-pedido.md) | [maquina-estados-pedido.png](maquina-estados-pedido.png) | Máquina de estados | Estados do agregado `Pedido` e transições |
@@ -38,14 +40,14 @@ Node.js ou Chromium localmente:
 cd docs/diagramas
 
 # 1) extrai os blocos mermaid dos .md para .mmd temporários
-for f in componentes sequencia-happy-path sequencia-resiliencia maquina-estados-pedido; do
+for f in c4-contexto c4-containers componentes sequencia-happy-path sequencia-resiliencia maquina-estados-pedido; do
   awk '/^```mermaid$/,/^```$/' "$f.md" | sed '1d;$d' > "$f.mmd"
 done
 
 # 2) renderiza cada .mmd em PNG (largura 2000-2200 px, fundo branco)
-for f in componentes sequencia-happy-path sequencia-resiliencia maquina-estados-pedido; do
+for f in c4-contexto c4-containers componentes sequencia-happy-path sequencia-resiliencia maquina-estados-pedido; do
   docker run --rm -v "$PWD:/data" minlag/mermaid-cli:latest \
-    -i "/data/$f.mmd" -o "/data/$f.png" -b white -t default -w 2000
+    -i "/data/$f.mmd" -o "/data/$f.png" -b white -t default -w 2400
 done
 
 # 3) limpa intermediários
