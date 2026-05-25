@@ -2,6 +2,7 @@ package br.com.fiaprestaurante.pagamento.adapter.inbound.graphql;
 
 import br.com.fiaprestaurante.pagamento.application.dto.PagamentoResponse;
 import br.com.fiaprestaurante.pagamento.application.port.input.ConsultarPagamentoUseCase;
+import br.com.fiaprestaurante.pagamento.domain.exception.PagamentoNaoEncontradoException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,6 +16,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -42,11 +44,13 @@ class PagamentoGraphQLControllerTest {
     }
 
     @Test
-    void deveRetornarNullQuandoPagamentoNaoExiste() {
+    void deveLancarNotFoundQuandoPagamentoNaoExiste() {
         UUID pedidoId = UUID.randomUUID();
         when(consultarPagamento.porPedidoId(pedidoId)).thenReturn(Optional.empty());
 
-        assertThat(controller.pagamentoPorPedido(pedidoId.toString())).isNull();
+        assertThatThrownBy(() -> controller.pagamentoPorPedido(pedidoId.toString()))
+                .isInstanceOf(PagamentoNaoEncontradoException.class)
+                .hasMessage("Pagamento não encontrado para o pedido informado.");
     }
 
     @Test

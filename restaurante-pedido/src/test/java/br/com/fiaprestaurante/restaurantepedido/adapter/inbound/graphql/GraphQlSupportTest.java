@@ -131,12 +131,14 @@ class GraphQlSupportTest {
     }
 
     @Test
-    void deveRetornarNullQuandoPedidoPorIdNaoForEncontrado() {
+    void deveLancarNotFoundQuandoPedidoPorIdNaoForEncontrado() {
         RestaurantePedidoGraphQLController controller = controller();
         when(consultarPedido.porId(TestFixtures.PEDIDO_ID, TestFixtures.CLIENTE_ID)).thenReturn(Optional.empty());
         autenticar(TestFixtures.CLIENTE_ID.toString());
 
-        assertThat(controller.pedidoPorId(TestFixtures.PEDIDO_ID.toString())).isNull();
+        assertThatThrownBy(() -> controller.pedidoPorId(TestFixtures.PEDIDO_ID.toString()))
+                .isInstanceOf(PedidoNaoEncontradoException.class)
+                .hasMessage("Pedido não encontrado para o identificador informado.");
     }
 
     @Test

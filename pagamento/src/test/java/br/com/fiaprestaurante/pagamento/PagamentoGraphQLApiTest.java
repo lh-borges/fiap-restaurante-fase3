@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -89,7 +90,8 @@ class PagamentoGraphQLApiTest {
         String response = mockMvc.perform(post("/graphql")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"query\":\"{pagamentosPendentes{pedidoId status}}\"}"))
-                .andExpect(status().isOk())
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errors[0].extensions.classification").value("FORBIDDEN"))
                 .andReturn().getResponse().getContentAsString();
 
         assertThat(response).contains("errors");
@@ -103,7 +105,8 @@ class PagamentoGraphQLApiTest {
                         .content("""
                                 {"query":"{pagamentoPorPedido(pedidoId:\\"%s\\"){id}}"}
                                 """.formatted(UUID.randomUUID()).strip()))
-                .andExpect(status().isOk())
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errors[0].extensions.classification").value("FORBIDDEN"))
                 .andReturn().getResponse().getContentAsString();
 
         assertThat(response).contains("errors");
@@ -117,10 +120,38 @@ class PagamentoGraphQLApiTest {
                         .content("""
                                 {"query":"{pagamentoPorPedido(pedidoId:\\"id-invalido\\"){id}}"}
                                 """.strip()))
-                .andExpect(status().isOk())
+                .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.data.pagamentoPorPedido").doesNotExist())
                 .andExpect(jsonPath("$.errors[0].message").value("Argumento invalido: Invalid UUID string: id-invalido"))
                 .andExpect(jsonPath("$.errors[0].extensions.classification").value("BAD_REQUEST"));
+    }
+
+    @Test
+    @WithMockUser(authorities = {"USUARIO"})
+    void deveTratarPagamentoNaoEncontradoComoNotFoundHttp() throws Exception {
+        mockMvc.perform(post("/graphql")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"query":"{pagamentoPorPedido(pedidoId:\\"%s\\"){id}}"}
+                                """.formatted(UUID.randomUUID()).strip()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errors[0].extensions.classification").value("NOT_FOUND"));
+    }
+
+    @Test
+    void devePublicarContratoOpenApiDoEndpointGraphqlProtegido() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.info.title").value("FIAP Restaurante - Pagamento"))
+                .andExpect(jsonPath("$.paths['/graphql'].post.security[0].bearerAuth").exists())
+                .andExpect(jsonPath("$.paths['/graphql'].post.requestBody.content['application/json'].examples.PagamentoPorPedido").exists())
+                .andExpect(jsonPath("$.paths['/graphql'].post.responses['200'].content['application/json'].examples.Sucesso").exists())
+                .andExpect(jsonPath("$.paths['/graphql'].post.responses['400'].content['application/json'].examples.ErroBadRequest").exists())
+                .andExpect(jsonPath("$.paths['/graphql'].post.responses['401']").exists())
+                .andExpect(jsonPath("$.paths['/graphql'].post.responses['403'].content['application/json'].examples.ErroForbidden").exists())
+                .andExpect(jsonPath("$.paths['/graphql'].post.responses['404'].content['application/json'].examples.ErroNotFound").exists())
+                .andExpect(jsonPath("$.paths['/graphql'].post.responses['500'].content['application/json'].examples.ErroInterno").exists())
+                .andExpect(jsonPath("$.components.securitySchemes.bearerAuth").exists());
     }
 
     private PagamentoJpaEntity salvarPagamento(UUID pedidoId, StatusPagamento status, String motivoFalha) {
@@ -137,4 +168,5 @@ class PagamentoGraphQLApiTest {
         );
         return pagamentoJpaRepository.save(pagamento);
     }
+
 }
