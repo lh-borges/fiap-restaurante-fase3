@@ -2,6 +2,7 @@ package br.com.fiaprestaurante.pagamento.adapter.inbound.graphql;
 
 import br.com.fiaprestaurante.pagamento.application.dto.PagamentoResponse;
 import br.com.fiaprestaurante.pagamento.application.port.input.ConsultarPagamentoUseCase;
+import br.com.fiaprestaurante.pagamento.domain.exception.PagamentoNaoEncontradoException;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -40,12 +41,15 @@ public class PagamentoGraphQLController {
      * {@code DONO_RESTAURANTE}.
      *
      * @param pedidoId identificador do pedido em formato UUID (string)
-     * @return o pagamento correspondente, ou {@code null} se não houver
+     * @return o pagamento correspondente
+     * @throws PagamentoNaoEncontradoException quando o pagamento não existe
      */
     @QueryMapping
     @PreAuthorize("hasAnyAuthority('USUARIO', 'DONO_RESTAURANTE')")
     public PagamentoResponse pagamentoPorPedido(@Argument String pedidoId) {
-        return consultarPagamento.porPedidoId(UUID.fromString(pedidoId)).orElse(null);
+        return consultarPagamento.porPedidoId(UUID.fromString(pedidoId))
+                .orElseThrow(() -> new PagamentoNaoEncontradoException(
+                        "Pagamento não encontrado para o pedido informado."));
     }
 
     /**

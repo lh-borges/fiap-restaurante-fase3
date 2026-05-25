@@ -30,10 +30,16 @@
         <grpc.version>1.68.1</grpc.version>
         <jbcrypt.version>0.4</jbcrypt.version>
         <rest-assured.version>5.5.0</rest-assured.version>
+        <springdoc.version>3.0.3</springdoc.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+                <version>${springdoc.version}</version>
+            </dependency>
             <dependency>
                 <groupId>br.com.fiaprestaurante</groupId>
                 <artifactId>shared</artifactId>

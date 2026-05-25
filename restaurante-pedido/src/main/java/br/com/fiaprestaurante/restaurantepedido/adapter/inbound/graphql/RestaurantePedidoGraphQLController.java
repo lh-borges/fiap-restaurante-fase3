@@ -10,6 +10,7 @@ import br.com.fiaprestaurante.restaurantepedido.application.port.input.Confirmar
 import br.com.fiaprestaurante.restaurantepedido.application.port.input.ConsultarModuloRestaurantePedidoUseCase;
 import br.com.fiaprestaurante.restaurantepedido.application.port.input.ConsultarPedidoUseCase;
 import br.com.fiaprestaurante.restaurantepedido.application.port.input.CriarPedidoUseCase;
+import br.com.fiaprestaurante.restaurantepedido.domain.exception.PedidoNaoEncontradoException;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
@@ -97,12 +98,15 @@ public class RestaurantePedidoGraphQLController {
      * Query GraphQL {@code pedidoPorId(pedidoId: ID!): Pedido}.
      *
      * @param pedidoId identificador do pedido
-     * @return o pedido, ou {@code null} se não encontrado
+     * @return o pedido correspondente
+     * @throws PedidoNaoEncontradoException quando o pedido não existe
      */
     @QueryMapping
     @PreAuthorize("hasAnyAuthority('USUARIO', 'DONO_RESTAURANTE')")
     public PedidoResponse pedidoPorId(@Argument String pedidoId) {
-        return consultarPedido.porId(UUID.fromString(pedidoId)).orElse(null);
+        return consultarPedido.porId(UUID.fromString(pedidoId))
+                .orElseThrow(() -> new PedidoNaoEncontradoException(
+                        "Pedido não encontrado para o identificador informado."));
     }
 
     /**

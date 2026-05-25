@@ -12,13 +12,14 @@ Projeto desenvolvido como **Tech Challenge da Fase 3** da PosTech FIAP. A especi
 
 1. [Como executar](#como-executar)
 2. [Testar com o Postman](#testar-com-o-postman)
-3. [Arquitetura e fluxo principal](#arquitetura-e-fluxo-principal)
-4. [Requisitos da Fase 3 — o que foi feito e como validar](#requisitos-da-fase-3--o-que-foi-feito-e-como-validar)
-5. [O que ainda falta](#o-que-ainda-falta)
-6. [Serviços e portas](#serviços-e-portas)
-7. [Stack](#stack)
-8. [Estrutura do repositório](#estrutura-do-repositório)
-9. [Diagnóstico e inspeção](#diagnóstico-e-inspeção)
+3. [Swagger e contrato HTTP do GraphQL](#swagger-e-contrato-http-do-graphql)
+4. [Arquitetura e fluxo principal](#arquitetura-e-fluxo-principal)
+5. [Requisitos da Fase 3 — o que foi feito e como validar](#requisitos-da-fase-3--o-que-foi-feito-e-como-validar)
+6. [O que ainda falta](#o-que-ainda-falta)
+7. [Serviços e portas](#serviços-e-portas)
+8. [Stack](#stack)
+9. [Estrutura do repositório](#estrutura-do-repositório)
+10. [Diagnóstico e inspeção](#diagnóstico-e-inspeção)
 
 ---
 
@@ -109,7 +110,7 @@ Na pasta [`docs/`](docs/):
 2. `2. Pedidos` → **Criar Pedido** — devolve o `id` e o `valorTotal` calculado; o `pedidoId` é salvo automaticamente.
 3. `2. Pedidos` → **Confirmar Pedido** — publica o evento `pedido.criado` no Kafka.
 4. Aguarde alguns segundos e rode `2. Pedidos` → **Pedido por ID** — o status evolui para `PAGO` (ou `PENDENTE_PAGAMENTO` se o gateway falhar).
-5. `3. Pagamento` → **Pagamento por Pedido** — confirma o pagamento `APROVADO`.
+5. `3. Pagamento` → **Pagamento por Pedido** — confirma o pagamento `APROVADO`. Como o processamento é assíncrono, uma consulta feita antes de o evento ser consumido retorna `404 NOT_FOUND`; aguarde alguns segundos e consulte novamente.
 
 ### Massa de testes (Collection Runner)
 
@@ -128,6 +129,31 @@ docker start procpag     # depois de rodar a massa
 ```
 
 Os pedidos criados com o gateway fora ficam `PENDENTE_PAGAMENTO` e são reprocessados automaticamente pelo worker quando ele volta. Confira o resultado em `2. Pedidos` → **Meus Pedidos**.
+
+---
+
+## Swagger e contrato HTTP do GraphQL
+
+Cada microsserviço publica a operação HTTP `POST /graphql` no Swagger UI, com exemplos de requisição e das respostas esperadas:
+
+| Serviço | Swagger UI | Documento OpenAPI |
+|---|---|---|
+| `usuario-autenticacao` | `http://localhost:8081/swagger-ui/index.html` | `http://localhost:8081/v3/api-docs` |
+| `restaurante-pedido` | `http://localhost:8082/swagger-ui/index.html` | `http://localhost:8082/v3/api-docs` |
+| `pagamento` | `http://localhost:8083/swagger-ui/index.html` | `http://localhost:8083/v3/api-docs` |
+
+Embora APIs GraphQL frequentemente respondam erros de execução com HTTP `200`, esta aplicação configura o endpoint para refletir a classificação do erro também no **status HTTP**:
+
+| Status HTTP | Classificação GraphQL | Exemplo de cenário |
+|---|---|---|
+| `200 OK` | — | Operação executada com sucesso. |
+| `400 BAD_REQUEST` | `BAD_REQUEST` | UUID inválido ou entrada incompatível com o contrato. |
+| `401 UNAUTHORIZED` | — | Token Bearer inválido ou expirado, rejeitado pelo Spring Security antes da execução GraphQL. |
+| `403 FORBIDDEN` | `FORBIDDEN` | Requisição sem autenticação ou usuário sem perfil para a operação. |
+| `404 NOT_FOUND` | `NOT_FOUND` | Consulta a usuário, pedido ou pagamento inexistente. |
+| `500 INTERNAL_SERVER_ERROR` | `INTERNAL_ERROR` | Falha inesperada do serviço. |
+
+Na query `pagamentoPorPedido`, um `pedidoId` em formato UUID válido sem pagamento registrado agora responde `404 NOT_FOUND` e inclui o erro GraphQL no corpo. Isso diferencia recurso ainda inexistente de um pagamento retornado com sucesso.
 
 ---
 
@@ -270,7 +296,7 @@ O requisito 4.6 pede que, quando o serviço de pagamento voltar a funcionar, os 
 | Item | Situação |
 |---|---|
 | 🎬 **Vídeo de apresentação** (até 10 min) | **Pendente** — precisa demonstrar as funcionalidades e explicar a arquitetura. Não é código; deve ser gravado antes da entrega. |
-| 🧪 **Testes automatizados** (unitários/integração) | Em andamento — cobertura sendo ampliada por outra integrante do time. Há testes mínimos de smoke nos módulos. |
+| 🧪 **Testes automatizados** (unitários/integração) | Validado em 25/05/2026 com JaCoCo: `usuario-autenticacao` 46 testes / `98,99%` de linhas; `restaurante-pedido` 43 testes / `92,91%`; `pagamento` 49 testes / `96,89%`. |
 | 📐 Diagrama C4 formal *(opcional)* | A spec aceita "diagrama de componentes, sequência **ou** C4". O diagrama de componentes ASCII deste README atende o requisito; um C4 formal seria um plus. |
 | 🧩 `restaurante-service` e `api-gateway` *(opcionais)* | Marcados como **opcionais** na spec (itens 5.1) — não implementados. |
 
@@ -298,6 +324,9 @@ Todos os containers vivem na rede `fase3net` e se enxergam pelo nome do serviço
 | `http://localhost:8081/graphiql` | GraphiQL do `usuario-autenticacao` |
 | `http://localhost:8082/graphiql` | GraphiQL do `restaurante-pedido` |
 | `http://localhost:8083/graphiql` | GraphiQL do `pagamento` |
+| `http://localhost:8081/swagger-ui/index.html` | Swagger UI / OpenAPI do `usuario-autenticacao`, com exemplos de cadastro, login e `me` |
+| `http://localhost:8082/swagger-ui/index.html` | Swagger UI / OpenAPI do `restaurante-pedido`, com exemplos de pedidos |
+| `http://localhost:8083/swagger-ui/index.html` | Swagger UI / OpenAPI do `pagamento`, com exemplos de consulta de pagamento e respostas HTTP |
 | `http://localhost:8085` | Kafka UI |
 
 ---
@@ -309,6 +338,7 @@ Todos os containers vivem na rede `fase3net` e se enxergam pelo nome do serviço
 | Java | 25 (Temurin LTS) |
 | Spring Boot | 4.0.5 |
 | Spring GraphQL | 4.0.x |
+| Springdoc OpenAPI / Swagger UI | 3.0.3 |
 | Spring Security (OAuth2 Resource Server) | 7.x |
 | Apache Kafka (Confluent) | 7.4.0 |
 | Spring Kafka | 4.0.4 |
