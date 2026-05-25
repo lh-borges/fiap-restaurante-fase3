@@ -71,7 +71,7 @@ demonstrar cada requisito de forma auditável.
 | # | Requisito | Status | Evidência | Como validar |
 |---|---|---|---|---|
 | 4.4.a | Serviço externo de pagamento (procpag) | ✅ | Container `procpag` (imagem fornecida) na porta `:8089` | `docker compose ps` mostra `procpag` Up |
-| 4.4.b | Pagamento dispara ao confirmar pedido | ✅ | `confirmarPedido` publica `pedido.criado`; `pagamento` consome e chama o procpag via HTTP | `docker logs pagamento` durante confirmação |
+| 4.4.b | Pagamento dispara ao confirmar pedido | ✅ | `confirmarPedido` publica `pedido.criado`; `pagamento-service` consome e chama o procpag via HTTP | `docker logs pagamento-service` durante confirmação |
 | 4.4.c | API procpag devolve aprovado quando disponível | ✅ | Comportamento do gateway externo; resposta consumida pelo `ExternalPaymentClient` | Logs do procpag e do pagamento mostram requisição/resposta |
 
 ### 4.5 — Pagamento Pendente
@@ -106,9 +106,9 @@ demonstrar cada requisito de forma auditável.
 |---|---|---|---|---|
 | 5.1.a | Serviços de autenticação | ✅ | Módulo Maven `usuario-autenticacao` (port 8081) | `docker compose ps` |
 | 5.1.b | `pedido-service` | ✅ | Módulo Maven `restaurante-pedido` (port 8082) | `docker compose ps` |
-| 5.1.c | `pagamento-service` chamando procpag | ✅ | Módulo Maven `pagamento` (port 8083) | `docker compose ps` |
+| 5.1.c | `pagamento-service` chamando procpag | ✅ | Módulo Maven `pagamento-service` (port 8083) | `docker compose ps` |
 | 5.1.d | (Opcional) `restaurante-service` que recebe aviso após confirmação | ✅ | **Implementado:** módulo Maven `restaurante-service` (port 8084) | `docker compose ps` |
-| 5.1.e | (Opcional) `api-gateway` | ⚠️ | **Não implementado** (decisão consciente — vide CLAUDE.md e ADR; ganho funcional marginal, complicaria demo de resiliência) | N/A — opcional |
+| 5.1.e | (Opcional) `api-gateway` | ⚠️ | **Não implementado** (decisão consciente — vide ADR; ganho funcional marginal, complicaria demo de resiliência) | N/A — opcional |
 | 5.1.f | Diagrama de componentes / sequência / C4 | ✅ | 4 diagramas Mermaid em `docs/diagramas/` | Abrir pasta `docs/diagramas/` |
 
 ### 5.2 — Segurança com Spring Security + JWT
@@ -128,7 +128,7 @@ demonstrar cada requisito de forma auditável.
 | 5.3.b | Tópico `pagamento.aprovado` | ✅ | Publicado por `PaymentKafkaPublisher.publicarPagamentoAprovado()` | Kafka UI |
 | 5.3.c | Tópico `pagamento.pendente` | ✅ | Publicado por `PaymentKafkaPublisher.publicarPagamentoPendente()` no fallback | Kafka UI durante cenário 4.5 |
 | 5.3.d | Fluxo: pedido publica `pedido.criado` | ✅ | `ConfirmarPedidoService` chama `eventPublisher.publicarPedidoCriado()` | `docker logs restaurante-pedido` |
-| 5.3.e | Fluxo: pagamento consome e processa | ✅ | `PedidoCriadoConsumer` no módulo `pagamento` | `docker logs pagamento` |
+| 5.3.e | Fluxo: pagamento consome e processa | ✅ | `PedidoCriadoConsumer` no módulo `pagamento-service` | `docker logs pagamento-service` |
 | 5.3.f | Fluxo: caso falha, publica `pagamento.pendente`, worker reprocessa | ✅ | Já coberto em 4.5 e 4.6 | Demo completa de resiliência |
 | 5.3.g | Fluxo: pedido atualiza status conforme eventos | ✅ | `PagamentoAprovadoConsumer` e `PagamentoPendenteConsumer` no `restaurante-pedido` | `docker logs restaurante-pedido` |
 | 5.3.h | (Extra) Tópicos para fluxo da cozinha | ✅ | 3 tópicos adicionais: `pedido.pronto-para-cozinha`, `pedido.em-preparo`, `pedido.pronto` | Kafka UI mostra **6 tópicos no total** |

@@ -173,7 +173,7 @@ Cada microsserviço publica a operação HTTP `POST /graphql` no Swagger UI, com
 |---|---|---|
 | `usuario-autenticacao` | `http://localhost:8081/swagger-ui/index.html` | `http://localhost:8081/v3/api-docs` |
 | `restaurante-pedido` | `http://localhost:8082/swagger-ui/index.html` | `http://localhost:8082/v3/api-docs` |
-| `pagamento` | `http://localhost:8083/swagger-ui/index.html` | `http://localhost:8083/v3/api-docs` |
+| `pagamento-service` | `http://localhost:8083/swagger-ui/index.html` | `http://localhost:8083/v3/api-docs` |
 
 Embora APIs GraphQL frequentemente respondam erros de execução com HTTP `200`, esta aplicação configura o endpoint para refletir a classificação do erro também no **status HTTP**:
 
@@ -198,7 +198,7 @@ A suíte unitária + smoke cobre as **4 aplicações** com **285 testes** e roda
 |---|---|---|
 | `usuario-autenticacao` | 63 | Domain (`Usuario`, `PerfilUsuario`, exceções) + use cases (cadastrar, autenticar, buscar) + BCrypt + `JwtTokenProvider` + controller GraphQL + `UsuarioGraphQLExceptionHandler` + `UsuarioMapper` + payloads + adapter gRPC + `DataSeeder` + smoke de contexto + smoke GraphQL |
 | `restaurante-pedido` | 126 | Domain (`Pedido`/`ItemPedido` com invariantes, transições e ownership) + use cases (criar, confirmar, consultar, atualizar status de pagamento e de cozinha) + adapters JPA, Kafka e GraphQL + `RestaurantePedidoGraphQLExceptionHandler` + 4 consumers (`pagamento.aprovado`, `pagamento.pendente`, `pedido.em-preparo`, `pedido.pronto`) + `AuthenticatedUser` + smoke de contexto + smoke GraphQL (8 cenários) |
-| `pagamento` | 57 | Domain (`Pagamento`, `StatusPagamento`, exceções) + use cases (processar, reprocessar, consultar) + `ExternalPaymentClient` + adapters Kafka/JPA/GraphQL + `PagamentoGraphQLExceptionHandler` + worker `@Scheduled` + configs (Bean/Kafka/Security) + smoke de contexto + smoke GraphQL |
+| `pagamento-service` | 57 | Domain (`Pagamento`, `StatusPagamento`, exceções) + use cases (processar, reprocessar, consultar) + `ExternalPaymentClient` + adapters Kafka/JPA/GraphQL + `PagamentoGraphQLExceptionHandler` + worker `@Scheduled` + configs (Bean/Kafka/Security) + smoke de contexto + smoke GraphQL |
 | `restaurante-service` | 39 | Domain (`PedidoCozinha`/`ItemCozinha`/`StatusCozinha`, invariantes e transições) + 4 use cases (receber pedido, iniciar preparo, marcar pronto, consultar fila) + adapters JPA + Kafka publisher/consumer + GraphQL controller + smoke de contexto |
 | **Total** | **285** | |
 
@@ -286,6 +286,13 @@ Cada execução do Maven Surefire grava um XML por classe de teste em `<modulo>/
 
 ### Diagrama de componentes
 
+![Diagrama de componentes](docs/diagramas/componentes.png)
+
+> Fonte: [`docs/diagramas/componentes.md`](docs/diagramas/componentes.md) (Mermaid, renderiza no GitHub). Imagem regerada via `mermaid-cli` em container — instruções em [`docs/diagramas/README.md`](docs/diagramas/README.md).
+
+<details>
+<summary>Versão ASCII (clique para expandir)</summary>
+
 ```
    Cliente (Postman / GraphiQL)
         |
@@ -339,33 +346,50 @@ Cada execução do Maven Surefire grava um XML por classe de teste em `<modulo>/
                                               +----------------------+
 ```
 
+</details>
+
 **6 tópicos Kafka** orquestram o fluxo:
 
 | Tópico | Publicador | Consumidor(es) |
 |---|---|---|
-| `pedido.criado` | restaurante-pedido | pagamento |
-| `pagamento.aprovado` | pagamento | restaurante-pedido |
-| `pagamento.pendente` | pagamento | restaurante-pedido |
+| `pedido.criado` | restaurante-pedido | pagamento-service |
+| `pagamento.aprovado` | pagamento-service | restaurante-pedido |
+| `pagamento.pendente` | pagamento-service | restaurante-pedido |
 | `pedido.pronto-para-cozinha` | restaurante-pedido | restaurante-service |
 | `pedido.em-preparo` | restaurante-service | restaurante-pedido |
 | `pedido.pronto` | restaurante-service | restaurante-pedido |
+
+### Diagramas de sequência
+
+Os fluxos completos estão documentados como diagramas de sequência (Mermaid + PNG):
+
+| Cenário | Imagem | Fonte |
+|---|---|---|
+| **Happy path** (cadastro → pago → entregue pela cozinha) | [![sequencia happy path](docs/diagramas/sequencia-happy-path.png)](docs/diagramas/sequencia-happy-path.png) | [`docs/diagramas/sequencia-happy-path.md`](docs/diagramas/sequencia-happy-path.md) |
+| **Resiliência** (gateway externo offline → fallback → reprocesso) | [![sequencia resiliencia](docs/diagramas/sequencia-resiliencia.png)](docs/diagramas/sequencia-resiliencia.png) | [`docs/diagramas/sequencia-resiliencia.md`](docs/diagramas/sequencia-resiliencia.md) |
+
+### Máquina de estados do agregado `Pedido`
+
+![Estados do pedido](docs/diagramas/maquina-estados-pedido.png)
+
+> Estados terminais: `PRONTO` e `CANCELADO`. Todas as transições disparadas por eventos Kafka são **idempotentes** — receber o mesmo evento duas vezes não causa efeito. Fonte: [`docs/diagramas/maquina-estados-pedido.md`](docs/diagramas/maquina-estados-pedido.md).
 
 ### Fluxo principal
 
 1. O cliente **cadastra-se** e faz **login** no `usuario-autenticacao`, que devolve um **JWT** assinado em RS256.
 2. Com o token, o cliente chama `criarPedido` no `restaurante-pedido` — o serviço calcula o `valorTotal` e devolve o pedido no status `CRIADO`. O **ID do cliente é extraído do JWT**.
 3. O cliente chama `confirmarPedido` — o pedido vai para `CONFIRMADO` e o evento **`pedido.criado`** é publicado no Kafka.
-4. O `pagamento` consome `pedido.criado` e chama o gateway externo **`procpag`** via HTTP, protegido por **Resilience4j**.
+4. O `pagamento-service` consome `pedido.criado` e chama o gateway externo **`procpag`** via HTTP, protegido por **Resilience4j**.
 5. **Sucesso:** o pagamento é aprovado, publica **`pagamento.aprovado`**; o `restaurante-pedido` consome e atualiza o pedido para **`PAGO`**.
 6. **Falha do gateway:** o fallback marca o pagamento como pendente e publica **`pagamento.pendente`**; o `restaurante-pedido` consome e marca o pedido como **`PENDENTE_PAGAMENTO`**.
-7. Um **worker** no `pagamento` (`@Scheduled`, a cada 30s) reprocessa os pagamentos pendentes; quando o gateway responde, o ciclo do passo 5 se completa e o pedido converge para `PAGO`.
+7. Um **worker** no `pagamento-service` (`@Scheduled`, a cada 30s) reprocessa os pagamentos pendentes; quando o gateway responde, o ciclo do passo 5 se completa e o pedido converge para `PAGO`.
 8. **Quando o pedido vira `PAGO`**, o `restaurante-pedido` publica **`pedido.pronto-para-cozinha`** com os itens (sem preço — irrelevante para a cozinha).
 9. O `restaurante-service` consome o evento e cria um `PedidoCozinha` no status `RECEBIDO`. O dono do restaurante (`DONO_RESTAURANTE`) consulta a fila via GraphQL em `:8084/graphql`.
 10. Mutations `iniciarPreparo` e `marcarComoPronto` avançam o estado (RECEBIDO → EM_PREPARO → PRONTO) e publicam **`pedido.em-preparo`** e **`pedido.pronto`**. O `restaurante-pedido` consome e reflete o status no `Pedido` principal.
 
 ### Pontos de resiliência
 
-Todos na chamada do `pagamento` ao `procpag` (`ExternalPaymentClient` + `ProcessarPagamentoService`):
+Todos na chamada do `pagamento-service` ao `procpag` (`ExternalPaymentClient` + `ProcessarPagamentoService`):
 
 - **Circuit Breaker** — abre após sequência de falhas, evitando martelar um gateway indisponível.
 - **Retry** — 3 tentativas com backoff exponencial.
@@ -375,30 +399,30 @@ Todos na chamada do `pagamento` ao `procpag` (`ExternalPaymentClient` + `Process
 
 ### O worker de reprocessamento (requisito 4.6)
 
-O reprocessamento automático de pagamentos pendentes é feito pelo **`ReprocessamentoPagamentoWorker`** — um componente `@Scheduled` que vive **inteiramente no microsserviço `pagamento`**.
+O reprocessamento automático de pagamentos pendentes é feito pelo **`ReprocessamentoPagamentoWorker`** — um componente `@Scheduled` que vive **inteiramente no microsserviço `pagamento-service`**.
 
-**Onde está configurado** (3 arquivos, todos no módulo `pagamento`):
+**Onde está configurado** (3 arquivos, todos no módulo `pagamento-service`):
 
 | Arquivo | Papel |
 |---|---|
-| `pagamento/.../PagamentoApplication.java` | `@EnableScheduling` — habilita o agendador do Spring |
-| `pagamento/.../infrastructure/scheduler/ReprocessamentoPagamentoWorker.java` | A classe do worker, com o método anotado `@Scheduled` |
-| `pagamento/src/main/resources/application.properties` | Os parâmetros do worker |
+| `pagamento-service/.../PagamentoApplication.java` | `@EnableScheduling` — habilita o agendador do Spring |
+| `pagamento-service/.../infrastructure/scheduler/ReprocessamentoPagamentoWorker.java` | A classe do worker, com o método anotado `@Scheduled` |
+| `pagamento-service/src/main/resources/application.properties` | Os parâmetros do worker |
 
 ```properties
-# pagamento/src/main/resources/application.properties
+# pagamento-service/src/main/resources/application.properties
 pagamento.reprocess.fixed-delay-ms=30000     # intervalo entre execucoes (30s)
 pagamento.reprocess.initial-delay-ms=15000   # espera apos o startup (15s)
 pagamento.reprocess.batch-size=20            # maximo de pendentes por ciclo
 ```
 
-> Essas propriedades só têm efeito no módulo `pagamento` — é lá que existe o `@Scheduled` que as lê. Declará-las em outro módulo não tem efeito algum.
+> Essas propriedades só têm efeito no módulo `pagamento-service` — é lá que existe o `@Scheduled` que as lê. Declará-las em outro módulo não tem efeito algum.
 
-**Por que o worker está no `pagamento` (e não no `restaurante-pedido`)?**
+**Por que o worker está no `pagamento-service` (e não no `restaurante-pedido`)?**
 
-- **O `pagamento` é o dono do estado do pagamento.** Os registros de pagamento (`PENDENTE`/`APROVADO`) vivem no banco `pagamento_db`, que pertence ao `pagamento`. Reprocessar é varrer esses registros pendentes — uma operação sobre os dados do próprio módulo.
-- **Só o `pagamento` conhece o gateway externo (`procpag`).** Reprocessar significa "tentar de novo a chamada ao gateway"; essa integração (`ExternalPaymentClient` + Resilience4j) vive no `pagamento`. O `restaurante-pedido` não conhece — nem deveria conhecer — o `procpag`.
-- **Separação de responsabilidades (bounded context).** O `restaurante-pedido` cuida do ciclo de vida do *pedido*; o `pagamento`, do ciclo de vida do *pagamento*. Colocar o worker de pagamento no `restaurante-pedido` misturaria os dois contextos e acoplaria o serviço de pedido a detalhes de pagamento.
+- **O `pagamento-service` é o dono do estado do pagamento.** Os registros de pagamento (`PENDENTE`/`APROVADO`) vivem no banco `pagamento_db`, que pertence ao `pagamento-service`. Reprocessar é varrer esses registros pendentes — uma operação sobre os dados do próprio módulo.
+- **Só o `pagamento-service` conhece o gateway externo (`procpag`).** Reprocessar significa "tentar de novo a chamada ao gateway"; essa integração (`ExternalPaymentClient` + Resilience4j) vive no `pagamento-service`. O `restaurante-pedido` não conhece — nem deveria conhecer — o `procpag`.
+- **Separação de responsabilidades (bounded context).** O `restaurante-pedido` cuida do ciclo de vida do *pedido*; o `pagamento-service`, do ciclo de vida do *pagamento*. Colocar o worker de pagamento no `restaurante-pedido` misturaria os dois contextos e acoplaria o serviço de pedido a detalhes de pagamento.
 - O `restaurante-pedido` apenas **reage** ao resultado: consome os eventos `pagamento.aprovado` / `pagamento.pendente` e atualiza o status do pedido.
 
 **Como isso atende o requisito 4.6 (Reprocessamento Automático):**
@@ -451,12 +475,12 @@ Cada decisão técnica deste projeto carrega um trade-off. Esta seção document
 
 ### Apache Kafka para comunicação assíncrona (em vez de chamadas síncronas)
 
-**Decisão:** o `pagamento` não recebe chamadas síncronas do `restaurante-pedido` — ele escuta o evento `pedido.criado`. Idem para o `restaurante-service`.
+**Decisão:** o `pagamento-service` não recebe chamadas síncronas do `restaurante-pedido` — ele escuta o evento `pedido.criado`. Idem para o `restaurante-service`.
 
 **Por que isso é a decisão mais importante do projeto:**
 
-1. **Desacopla bounded contexts.** O `restaurante-pedido` não conhece o `pagamento` (e vice-versa) — eles só falam pela linguagem ubíqua dos eventos. Trocar a implementação do `pagamento` é invisível para os outros.
-2. **Habilita a resiliência exigida pelo req. 4.5/4.6.** Quando o gateway externo cai, o `restaurante-pedido` não fica com requisição pendurada — ele já recebeu o evento e seguiu a vida. O `pagamento` reprocessa quando puder.
+1. **Desacopla bounded contexts.** O `restaurante-pedido` não conhece o `pagamento-service` (e vice-versa) — eles só falam pela linguagem ubíqua dos eventos. Trocar a implementação do `pagamento-service` é invisível para os outros.
+2. **Habilita a resiliência exigida pelo req. 4.5/4.6.** Quando o gateway externo cai, o `restaurante-pedido` não fica com requisição pendurada — ele já recebeu o evento e seguiu a vida. O `pagamento-service` reprocessa quando puder.
 3. **Permite replay.** Se um consumer tiver bug, é só consertar e re-processar o tópico desde o offset desejado.
 4. **Desliga o cliente do trabalho pesado.** O cliente recebe resposta de `confirmarPedido` em ms, mesmo se o gateway de pagamento demorar segundos.
 
@@ -537,16 +561,16 @@ Cada decisão técnica deste projeto carrega um trade-off. Esta seção document
 | ✅ **4.1** Criar e autenticar cliente | `usuario-autenticacao` — mutations GraphQL `cadastrarUsuario` e `login` (JWT RS256) | Postman › `1. Autenticacao` › *Cadastrar Usuario* e *Login como Usuario* |
 | ✅ **4.2** Criar pedido (cliente do token, restaurante, itens, total, confirmação) | `restaurante-pedido` — mutations `criarPedido` (calcula `valorTotal`) e `confirmarPedido` | Postman › `2. Pedidos` › *Criar Pedido* (veja o `valorTotal`) e *Confirmar Pedido* |
 | ✅ **4.3** Consultar pedido por ID e listar pedidos do cliente | `restaurante-pedido` — queries `pedidoPorId` (com **verificação de ownership** — só retorna se o pedido pertencer ao cliente do JWT) e `meusPedidos` | Postman › `2. Pedidos` › *Pedido por ID* e *Meus Pedidos*. Tentar consultar pedido alheio retorna `404 NOT_FOUND` |
-| ✅ **4.4** Processar pagamento via gateway externo | `pagamento` — `ExternalPaymentClient` chama `procpag:8089/requisicao` ao consumir `pedido.criado` | Crie e confirme um pedido; depois Postman › `3. Pagamento` › *Pagamento por Pedido* → `APROVADO`. Logs: `docker logs pagamento` |
+| ✅ **4.4** Processar pagamento via gateway externo | `pagamento-service` — `ExternalPaymentClient` chama `procpag:8089/requisicao` ao consumir `pedido.criado` | Crie e confirme um pedido; depois Postman › `3. Pagamento` › *Pagamento por Pedido* → `APROVADO`. Logs: `docker logs pagamento-service` |
 | ✅ **4.5** Pagamento pendente quando o gateway está indisponível | Fallback do Resilience4j marca `PENDENTE` e publica `pagamento.pendente`; o pedido não falha | `docker stop procpag`, crie+confirme um pedido; consulte *Pedido por ID* → `PENDENTE_PAGAMENTO` |
-| ✅ **4.6** Reprocessamento automático | `pagamento` — `ReprocessamentoPagamentoWorker` (`@Scheduled` 30s) reprocessa pendentes | Após o teste 4.5, `docker start procpag`; aguarde ~30s e consulte *Pedido por ID* → `PAGO` |
+| ✅ **4.6** Reprocessamento automático | `pagamento-service` — `ReprocessamentoPagamentoWorker` (`@Scheduled` 30s) reprocessa pendentes | Após o teste 4.5, `docker start procpag`; aguarde ~30s e consulte *Pedido por ID* → `PAGO` |
 | ✅ **4.7** Atualização automática de status | `restaurante-pedido` consome `pagamento.aprovado`/`pagamento.pendente` e atualiza o pedido | Consulte *Pedido por ID* após o pagamento — o status muda sem intervenção manual |
 
 ### Requisitos não funcionais
 
 | Requisito | Implementação | Como validar |
 |---|---|---|
-| ✅ **5.1** Arquitetura em múltiplos serviços | `usuario-autenticacao`, `restaurante-pedido`, `pagamento`, `restaurante-service` (opcional, implementado) — 4 módulos Maven independentes | `docker compose ps` — 4 aplicações + `procpag` + infraestrutura |
+| ✅ **5.1** Arquitetura em múltiplos serviços | `usuario-autenticacao`, `restaurante-pedido`, `pagamento-service`, `restaurante-service` (opcional, implementado) — 4 módulos Maven independentes | `docker compose ps` — 4 aplicações + `procpag` + infraestrutura |
 | ✅ **5.2** Spring Security + JWT (login, perfis, endpoints protegidos, ID do token) | JWT RS256; perfis `USUARIO` (cliente) e `DONO_RESTAURANTE` (admin); `@PreAuthorize` nos resolvers; `clienteId` extraído do `subject` do token | Postman › *Me sem autenticacao* e *Criar Pedido sem autenticacao* → erro; com token → sucesso |
 | ✅ **5.3** Comunicação assíncrona com Kafka | **6 tópicos**: `pedido.criado`, `pagamento.aprovado`, `pagamento.pendente`, `pedido.pronto-para-cozinha`, `pedido.em-preparo`, `pedido.pronto` | Kafka UI em `http://localhost:8085` — inspecione os 6 tópicos e suas mensagens |
 | ✅ **5.4** Resiliência (Resilience4j) | Circuit Breaker + Retry + Timeout + Fallback na chamada ao `procpag` | `curl http://localhost:8083/actuator/circuitbreakers`; logs mostram o CB abrindo sob falhas |
@@ -582,7 +606,7 @@ Cada decisão técnica deste projeto carrega um trade-off. Esta seção document
 |---|---|---|---|
 | `usuario-autenticacao` | 8081 | Spring Boot (build local) | Cadastro/login, emissão de JWT, servidor gRPC de consulta de usuário |
 | `restaurante-pedido` | 8082 | Spring Boot (build local) | Criação/confirmação/consulta de pedidos; produz `pedido.criado` e `pedido.pronto-para-cozinha`, consome `pagamento.*`, `pedido.em-preparo` e `pedido.pronto` |
-| `pagamento` | 8083 | Spring Boot (build local) | Consome `pedido.criado`, chama o `procpag` com resiliência, publica `pagamento.*`, worker de reprocessamento |
+| `pagamento-service` | 8083 | Spring Boot (build local) | Consome `pedido.criado`, chama o `procpag` com resiliência, publica `pagamento.*`, worker de reprocessamento |
 | `restaurante-service` | 8084 | Spring Boot (build local) | Fila da cozinha (RECEBIDO/EM_PREPARO/PRONTO); consome `pedido.pronto-para-cozinha`, publica `pedido.em-preparo` e `pedido.pronto` |
 | `procpag` | 8089 | `docker.io/erickemprobr/procpag:latest` | **Gateway de pagamento externo (fornecido pelos professores)** — simula um serviço *eventualmente disponível*: ora autoriza, ora responde com erro/timeout |
 | `mysql` | 3307 (host) → 3306 | `mysql:8.4` | Persistência — bancos `auth_db`, `pedido_db`, `pagamento_db`, `cozinha_db` criados por `init.sql` |
@@ -597,7 +621,7 @@ Todos os containers vivem na rede `fase3net` e se enxergam pelo nome do serviço
 |---|---|
 | `http://localhost:8081/graphiql` | GraphiQL do `usuario-autenticacao` |
 | `http://localhost:8082/graphiql` | GraphiQL do `restaurante-pedido` |
-| `http://localhost:8083/graphiql` | GraphiQL do `pagamento` |
+| `http://localhost:8083/graphiql` | GraphiQL do `pagamento-service` |
 | `http://localhost:8084/graphiql` | GraphiQL do `restaurante-service` (cozinha) |
 | `http://localhost:8085` | Kafka UI |
 
@@ -635,12 +659,12 @@ fiap-restaurante-fase3/
 ├── shared/                     # stubs gRPC + BusinessException compartilhada
 ├── usuario-autenticacao/       # microsserviço de cadastro/login/JWT
 ├── restaurante-pedido/         # microsserviço de pedidos
-├── pagamento/                  # microsserviço de pagamento (Kafka + Resilience4j)
+├── pagamento-service/          # microsserviço de pagamento (Kafka + Resilience4j) — nome conforme req. 5.1
 ├── restaurante-service/        # microsserviço de cozinha (fila de produção)
 ├── docs/
 │   ├── documentacao-arquitetura.pdf                       # documentação técnica ABNT (17 pp)
 │   ├── adr/                                               # 13 Architecture Decision Records
-│   ├── diagramas/                                         # diagramas Mermaid (componentes + sequência + estados)
+│   ├── diagramas/                                         # 4 diagramas: fonte Mermaid (.md) + renderização (.png)
 │   ├── build-pdf/                                         # script Python que regenera o PDF
 │   ├── fiap-fase-3-restaurante.postman_collection.json    # coleção de testes
 │   ├── fiap-fase-3-restaurante.postman_environment.json   # environment (URLs + credenciais)
@@ -667,7 +691,7 @@ Cada microsserviço segue o mesmo layout interno (arquitetura hexagonal):
 └── infrastructure/
     ├── config/                 # SecurityConfig, KafkaConfig, GraphQlConfig
     ├── exception/              # *GraphQLExceptionHandler (tradução de exceções de negócio em erros GraphQL)
-    └── scheduler/              # workers @Scheduled (só no `pagamento`)
+    └── scheduler/              # workers @Scheduled (só no `pagamento-service`)
 ```
 
 ### Contas seed
@@ -687,7 +711,7 @@ Criadas automaticamente na inicialização:
 
 ```bash
 docker logs -f restaurante-pedido
-docker logs -f pagamento
+docker logs -f pagamento-service
 docker logs -f usuario-autenticacao
 docker logs -f restaurante-service
 ```

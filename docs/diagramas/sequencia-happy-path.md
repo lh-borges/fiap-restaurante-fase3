@@ -11,7 +11,7 @@ sequenceDiagram
     participant Auth as usuario-autenticacao
     participant Pedido as restaurante-pedido
     participant Kafka as Kafka
-    participant Pagamento as pagamento
+    participant Pagamento as pagamento-service
     participant Procpag as procpag
     participant Cozinha as restaurante-service
 

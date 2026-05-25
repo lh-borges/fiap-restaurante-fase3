@@ -10,7 +10,7 @@ graph TB
     subgraph Aplicacoes
         Auth[usuario-autenticacao :8081<br/>GraphQL + gRPC server]
         Pedido[restaurante-pedido :8082<br/>GraphQL]
-        Pagamento[pagamento :8083<br/>GraphQL + Worker @Scheduled]
+        Pagamento[pagamento-service :8083<br/>GraphQL + Worker @Scheduled]
         Cozinha[restaurante-service :8084<br/>GraphQL]
     end
 
@@ -66,7 +66,7 @@ graph TB
 - **Consome:** `pagamento.aprovado`, `pagamento.pendente`,
   `pedido.em-preparo`, `pedido.pronto`.
 
-### `pagamento` (porta 8083)
+### `pagamento-service` (porta 8083)
 
 - **Função:** processamento de cobrança contra o `procpag` com
   resiliência (Circuit Breaker + Retry + Timeout + Fallback);

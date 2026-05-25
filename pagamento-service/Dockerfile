@@ -15,12 +15,12 @@ COPY . .
 RUN --mount=type=cache,target=/root/.m2 \
     mvn -B -Dmaven.wagon.http.retryHandler.count=5 \
         -Dmaven.wagon.http.retryHandler.requestSentEnabled=true \
-        clean package -pl pagamento -am -DskipTests
+        clean package -pl pagamento-service -am -DskipTests
 
 # ============ 2) Extract layers ============
 FROM ${JDK_IMAGE} AS extract
 WORKDIR /build
-COPY --from=build /app/pagamento/target/*.jar app.jar
+COPY --from=build /app/pagamento-service/target/*.jar app.jar
 RUN java -Djarmode=layertools -jar app.jar extract
 
 # ============ 3) CDS training ============

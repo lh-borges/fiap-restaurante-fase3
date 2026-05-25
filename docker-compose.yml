@@ -270,12 +270,12 @@ services:
     networks:
       - fase3net
 
-  pagamento:
+  pagamento-service:
     build:
       context: .
-      dockerfile: pagamento/Dockerfile
-    image: fiap-fase3/pagamento:local
-    container_name: pagamento
+      dockerfile: pagamento-service/Dockerfile
+    image: fiap-fase3/pagamento-service:local
+    container_name: pagamento-service
     restart: unless-stopped
     init: true
     depends_on:

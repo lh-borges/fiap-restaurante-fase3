@@ -22,7 +22,7 @@
         <module>shared</module>
         <module>usuario-autenticacao</module>
         <module>restaurante-pedido</module>
-        <module>pagamento</module>
+        <module>pagamento-service</module>
         <module>restaurante-service</module>
     </modules>
 
