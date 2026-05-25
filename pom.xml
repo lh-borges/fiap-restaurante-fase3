@@ -23,6 +23,7 @@
         <module>usuario-autenticacao</module>
         <module>restaurante-pedido</module>
         <module>pagamento</module>
+        <module>restaurante-service</module>
     </modules>
 
     <properties>

@@ -292,6 +292,52 @@ services:
     networks:
       - fase3net
 
+  restaurante-service:
+    build:
+      context: .
+      dockerfile: restaurante-service/Dockerfile
+    image: fiap-fase3/restaurante-service:local
+    container_name: restaurante-service
+    restart: unless-stopped
+    init: true
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      usuario-autenticacao:
+        condition: service_healthy
+    ports:
+      - "8084:8084"
+    environment:
+      <<: *app-jvm-opts
+      SERVER_PORT: 8084
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/cozinha_db?useSSL=false&allowPublicKeyRetrieval=true&cachePrepStmts=true&useServerPrepStmts=true&rewriteBatchedStatements=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 10
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 2
+      SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.MySQLDialect
+      SPRING_JPA_OPEN_IN_VIEW: "false"
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    tmpfs:
+      - /tmp:size=128M
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8084/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    logging: *app-logging
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+        reservations:
+          memory: 384M
+    networks:
+      - fase3net
+
 volumes:
   mysql_data:
   kafka_data:
