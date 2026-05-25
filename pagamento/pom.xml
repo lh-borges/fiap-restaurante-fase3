@@ -123,10 +123,12 @@
             <artifactId>rest-assured</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- H2 em scope runtime para suportar o training de AppCDS no build do container
+             (Dockerfile usa o profile `cds` com H2 in-memory). Tambem permanece disponivel em testes. -->
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
-            <scope>test</scope>
+            <scope>runtime</scope>
         </dependency>
     </dependencies>
 

@@ -13,13 +13,14 @@ Projeto desenvolvido como **Tech Challenge da Fase 3** da PosTech FIAP. A especi
 1. [Como executar](#como-executar)
 2. [Testar com o Postman](#testar-com-o-postman)
 3. [Swagger e contrato HTTP do GraphQL](#swagger-e-contrato-http-do-graphql)
-4. [Arquitetura e fluxo principal](#arquitetura-e-fluxo-principal)
-5. [Requisitos da Fase 3 — o que foi feito e como validar](#requisitos-da-fase-3--o-que-foi-feito-e-como-validar)
-6. [O que ainda falta](#o-que-ainda-falta)
-7. [Serviços e portas](#serviços-e-portas)
-8. [Stack](#stack)
-9. [Estrutura do repositório](#estrutura-do-repositório)
-10. [Diagnóstico e inspeção](#diagnóstico-e-inspeção)
+4. [Testes automatizados](#testes-automatizados)
+5. [Arquitetura e fluxo principal](#arquitetura-e-fluxo-principal)
+6. [Requisitos da Fase 3 — o que foi feito e como validar](#requisitos-da-fase-3--o-que-foi-feito-e-como-validar)
+7. [O que ainda falta](#o-que-ainda-falta)
+8. [Serviços e portas](#serviços-e-portas)
+9. [Stack](#stack)
+10. [Estrutura do repositório](#estrutura-do-repositório)
+11. [Diagnóstico e inspeção](#diagnóstico-e-inspeção)
 
 ---
 
@@ -155,6 +156,95 @@ Embora APIs GraphQL frequentemente respondam erros de execução com HTTP `200`,
 
 Na query `pagamentoPorPedido`, um `pedidoId` em formato UUID válido sem pagamento registrado agora responde `404 NOT_FOUND` e inclui o erro GraphQL no corpo. Isso diferencia recurso ainda inexistente de um pagamento retornado com sucesso.
 
+## Testes automatizados
+
+A suíte unitária + smoke cobre as três aplicações com **233 testes** e roda em ~40s. **Não exige Docker, MySQL nem Kafka externos** — usa H2 em memória, `@EmbeddedKafka` e mocks nas dependências.
+
+### Cobertura atual por módulo
+
+| Módulo | Testes | O que cobre |
+|---|---|---|
+| `usuario-autenticacao` | 63 | Domain (`Usuario`, `PerfilUsuario`, exceções) + use cases (cadastrar, autenticar, buscar) + BCrypt + `JwtTokenProvider` + controller GraphQL + `UsuarioGraphQLExceptionHandler` + `UsuarioMapper` + payloads + adapter gRPC + `DataSeeder` + smoke de contexto + smoke GraphQL |
+| `restaurante-pedido` | 113 | Domain (`Pedido`/`ItemPedido` com invariantes, transições e ownership) + use cases (criar, confirmar, consultar com filtro por dono, atualizar status) + adapters JPA, Kafka e GraphQL + `RestaurantePedidoGraphQLExceptionHandler` + consumers `pagamento.aprovado`/`pagamento.pendente` + `AuthenticatedUser` + smoke de contexto + smoke GraphQL (8 cenários) |
+| `pagamento` | 57 | Domain (`Pagamento`, `StatusPagamento`, exceções) + use cases (processar, reprocessar, consultar) + `ExternalPaymentClient` + adapters Kafka/JPA/GraphQL + `PagamentoGraphQLExceptionHandler` + worker `@Scheduled` + configs (Bean/Kafka/Security) + smoke de contexto + smoke GraphQL |
+| **Total** | **233** | |
+
+### Rodar tudo
+
+A partir da raiz do projeto:
+
+```bash
+./mvnw test            # roda os 4 módulos
+```
+
+> ⚠️ **O Maven Surefire mostra `Tests run: N` por módulo, mas não agrega no Reactor Summary.** O número que aparece no fim é só do último módulo executado. Para ver o total agregado, use o script abaixo.
+
+### Resumo agregado (script)
+
+Para ter um relatório consolidado com totais por módulo + total agregado, use os scripts em [`scripts/`](scripts/):
+
+| SO | Comando |
+|---|---|
+| Linux / macOS | `./scripts/test-summary.sh` |
+| Windows (PowerShell) | `.\scripts\test-summary.ps1` |
+
+Saída:
+
+```
+============================================================
+ RESUMO POR MODULO
+============================================================
+  pagamento                 tests:   57   falhas: 0   erros: 0   skip: 0   tempo:  14,92s
+  restaurante-pedido        tests:  113   falhas: 0   erros: 0   skip: 0   tempo:  13,85s
+  usuario-autenticacao      tests:   63   falhas: 0   erros: 0   skip: 0   tempo:  10,65s
+
+============================================================
+ TOTAL AGREGADO
+============================================================
+  Tests run:  233
+  Failures:   0
+  Errors:     0
+  Skipped:    0
+  Tempo:      39,42s
+```
+
+Linhas em **verde** se o módulo passou, **vermelhas** se houve falha/erro. O exit code é `1` se algum teste falhou — pronto para CI.
+
+**Opções dos scripts:**
+
+| Linux/macOS | Windows | Efeito |
+|---|---|---|
+| `--quiet` ou `-q` | `-Quiet` | Roda o Maven com `-q` (saída reduzida) |
+| `--skip-build` | `-SkipBuild` | Pula o `mvn test` e só lê os XMLs existentes (útil quando o build já rodou) |
+| `--help` ou `-h` | `Get-Help .\scripts\test-summary.ps1` | Mostra ajuda |
+
+> Se a Execution Policy do PowerShell bloquear, rode via:
+> ```powershell
+> powershell -ExecutionPolicy Bypass -File .\scripts\test-summary.ps1
+> ```
+
+### Rodar testes de um único módulo
+
+```bash
+./mvnw -pl restaurante-pedido -am test    # só restaurante-pedido (compila shared antes)
+./mvnw -pl pagamento -am test             # só pagamento
+./mvnw -pl usuario-autenticacao -am test  # só auth
+```
+
+### Stack de testes
+
+- **JUnit 5** (Jupiter) — runner
+- **AssertJ** — fluent assertions
+- **Mockito** — mocks dos colaboradores
+- **Spring Boot Test** + `@SpringBootTest` — testes de contexto (smoke)
+- **H2** in-memory + `MODE=MySQL` — substitui o MySQL nos testes
+- **`@EmbeddedKafka`** — broker Kafka iniciado pelo próprio teste
+- **Spring Security Test** + `@WithMockUser` — autenticação simulada
+
+### Como o script de resumo funciona
+
+Cada execução do Maven Surefire grava um XML por classe de teste em `<modulo>/target/surefire-reports/TEST-*.xml` no formato JUnit padrão. O script percorre todos esses XMLs, soma os atributos do `<testsuite>` (`tests`, `failures`, `errors`, `skipped`, `time`) e imprime o agregado. Não há dependência externa — o `.sh` usa só `find`/`grep`/`sed`/`awk` e o `.ps1` usa `[xml]` do PowerShell.
+
 ---
 
 ## Arquitetura e fluxo principal
@@ -262,7 +352,7 @@ O requisito 4.6 pede que, quando o serviço de pagamento voltar a funcionar, os 
 |---|---|---|
 | ✅ **4.1** Criar e autenticar cliente | `usuario-autenticacao` — mutations GraphQL `cadastrarUsuario` e `login` (JWT RS256) | Postman › `1. Autenticacao` › *Cadastrar Usuario* e *Login como Usuario* |
 | ✅ **4.2** Criar pedido (cliente do token, restaurante, itens, total, confirmação) | `restaurante-pedido` — mutations `criarPedido` (calcula `valorTotal`) e `confirmarPedido` | Postman › `2. Pedidos` › *Criar Pedido* (veja o `valorTotal`) e *Confirmar Pedido* |
-| ✅ **4.3** Consultar pedido por ID e listar pedidos do cliente | `restaurante-pedido` — queries `pedidoPorId` e `meusPedidos` | Postman › `2. Pedidos` › *Pedido por ID* e *Meus Pedidos* |
+| ✅ **4.3** Consultar pedido por ID e listar pedidos do cliente | `restaurante-pedido` — queries `pedidoPorId` (com **verificação de ownership** — só retorna se o pedido pertencer ao cliente do JWT) e `meusPedidos` | Postman › `2. Pedidos` › *Pedido por ID* e *Meus Pedidos*. Tentar consultar pedido alheio retorna `404 NOT_FOUND` |
 | ✅ **4.4** Processar pagamento via gateway externo | `pagamento` — `ExternalPaymentClient` chama `procpag:8089/requisicao` ao consumir `pedido.criado` | Crie e confirme um pedido; depois Postman › `3. Pagamento` › *Pagamento por Pedido* → `APROVADO`. Logs: `docker logs pagamento` |
 | ✅ **4.5** Pagamento pendente quando o gateway está indisponível | Fallback do Resilience4j marca `PENDENTE` e publica `pagamento.pendente`; o pedido não falha | `docker stop procpag`, crie+confirme um pedido; consulte *Pedido por ID* → `PENDENTE_PAGAMENTO` |
 | ✅ **4.6** Reprocessamento automático | `pagamento` — `ReprocessamentoPagamentoWorker` (`@Scheduled` 30s) reprocessa pendentes | Após o teste 4.5, `docker start procpag`; aguarde ~30s e consulte *Pedido por ID* → `PAGO` |
@@ -295,10 +385,11 @@ O requisito 4.6 pede que, quando o serviço de pagamento voltar a funcionar, os 
 
 | Item | Situação |
 |---|---|
-| 🎬 **Vídeo de apresentação** (até 10 min) | **Pendente** — precisa demonstrar as funcionalidades e explicar a arquitetura. Não é código; deve ser gravado antes da entrega. |
-| 🧪 **Testes automatizados** (unitários/integração) | Validado em 25/05/2026 com JaCoCo: `usuario-autenticacao` 46 testes / `98,99%` de linhas; `restaurante-pedido` 43 testes / `92,91%`; `pagamento` 49 testes / `96,89%`. |
+| 🎬 **Vídeo de apresentação** (até 10 min) | **Pendente — única entrega bloqueante** restante. Precisa demonstrar as funcionalidades e explicar a arquitetura. Não é código; deve ser gravado antes da entrega. |
+| 🧹 Limpeza de testes duplicados *(opcional)* | Após o merge de duas branches de testes em paralelo, alguns use cases têm versão "consolidada" (ex.: `PedidoUseCaseServiceTest`) coexistindo com versão "granular" (ex.: `CriarPedidoServiceTest` + `ConfirmarPedidoServiceTest` + ...). Funciona; só duplica execução. Pode ser limpado num PR à parte. |
 | 📐 Diagrama C4 formal *(opcional)* | A spec aceita "diagrama de componentes, sequência **ou** C4". O diagrama de componentes ASCII deste README atende o requisito; um C4 formal seria um plus. |
-| 🧩 `restaurante-service` e `api-gateway` *(opcionais)* | Marcados como **opcionais** na spec (itens 5.1) — não implementados. |
+| 🐳 Revisão dos Dockerfiles *(opcional)* | Funciona e usa BuildKit cache mount; pode evoluir com healthchecks dos apps, JVM tuning explícito, secrets via Docker Compose. |
+| 🧩 `restaurante-service` e `api-gateway` *(opcionais)* | Marcados como **opcionais** na spec (item 5.1) — não implementados. Decisão consciente: o mínimo já está atendido. |
 
 ---
 
@@ -362,9 +453,12 @@ fiap-restaurante-fase3/
 ├── usuario-autenticacao/       # microsserviço de cadastro/login/JWT
 ├── restaurante-pedido/         # microsserviço de pedidos
 ├── pagamento/                  # microsserviço de pagamento (Kafka + Resilience4j)
-└── docs/
-    ├── fiap-fase-3-restaurante.postman_collection.json    # coleção de testes
-    └── fiap-fase-3-restaurante.postman_environment.json   # environment (URLs + credenciais)
+├── docs/
+│   ├── fiap-fase-3-restaurante.postman_collection.json    # coleção de testes
+│   └── fiap-fase-3-restaurante.postman_environment.json   # environment (URLs + credenciais)
+└── scripts/
+    ├── test-summary.sh         # roda mvn test e imprime resumo agregado (Linux/macOS)
+    └── test-summary.ps1        # idem para Windows (PowerShell)
 ```
 
 Cada microsserviço segue o mesmo layout interno (arquitetura hexagonal):

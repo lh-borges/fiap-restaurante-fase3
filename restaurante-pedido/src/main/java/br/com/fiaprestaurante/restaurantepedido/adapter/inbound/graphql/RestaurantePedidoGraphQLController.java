@@ -97,14 +97,19 @@ public class RestaurantePedidoGraphQLController {
     /**
      * Query GraphQL {@code pedidoPorId(pedidoId: ID!): Pedido}.
      *
+     * <p>Restrita ao dono do pedido: o {@code clienteId} é extraído do JWT
+     * e comparado com o do pedido. Pedidos de outros clientes retornam
+     * {@code null} (mesma resposta que "não encontrado", para não vazar
+     * a existência do recurso).
+     *
      * @param pedidoId identificador do pedido
      * @return o pedido correspondente
-     * @throws PedidoNaoEncontradoException quando o pedido não existe
+     * @throws PedidoNaoEncontradoException quando o pedido não existe ou pertence a outro cliente
      */
     @QueryMapping
     @PreAuthorize("hasAnyAuthority('USUARIO', 'DONO_RESTAURANTE')")
     public PedidoResponse pedidoPorId(@Argument String pedidoId) {
-        return consultarPedido.porId(UUID.fromString(pedidoId))
+        return consultarPedido.porId(UUID.fromString(pedidoId), AuthenticatedUser.clienteId())
                 .orElseThrow(() -> new PedidoNaoEncontradoException(
                         "Pedido não encontrado para o identificador informado."));
     }

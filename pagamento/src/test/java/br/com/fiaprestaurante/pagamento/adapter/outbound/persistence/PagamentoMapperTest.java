@@ -10,63 +10,63 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Testes unitarios do {@link PagamentoMapper} - valida conversao em
+ * ambos os sentidos e o round-trip.
+ *
+ * @author Danilo Fernando
+ */
 class PagamentoMapperTest {
 
+    private static final UUID PEDIDO_ID = UUID.fromString("11111111-1111-4111-8111-111111111111");
+
     @Test
-    void deveConverterDomainParaEntity() {
-        Pagamento pagamento = pagamento();
+    void toEntityDeveCopiarTodosOsCampos() {
+        Pagamento p = new Pagamento(PEDIDO_ID, new BigDecimal("59.30"));
 
-        PagamentoJpaEntity entity = PagamentoMapper.toEntity(pagamento);
+        PagamentoJpaEntity entity = PagamentoMapper.toEntity(p);
 
-        assertThat(entity.getId()).isEqualTo(pagamento.getId());
-        assertThat(entity.getPedidoId()).isEqualTo(pagamento.getPedidoId());
-        assertThat(entity.getValor()).isEqualByComparingTo(pagamento.getValor());
-        assertThat(entity.getStatus()).isEqualTo(pagamento.getStatus());
-        assertThat(entity.getTentativas()).isEqualTo(pagamento.getTentativas());
-        assertThat(entity.getMotivoFalha()).isEqualTo(pagamento.getMotivoFalha());
-        assertThat(entity.getCreatedAt()).isEqualTo(pagamento.getCreatedAt());
-        assertThat(entity.getUpdatedAt()).isEqualTo(pagamento.getUpdatedAt());
+        assertThat(entity.getId()).isEqualTo(p.getId());
+        assertThat(entity.getPedidoId()).isEqualTo(p.getPedidoId());
+        assertThat(entity.getValor()).isEqualByComparingTo(p.getValor());
+        assertThat(entity.getStatus()).isEqualTo(p.getStatus());
+        assertThat(entity.getTentativas()).isEqualTo(p.getTentativas());
+        assertThat(entity.getCreatedAt()).isEqualTo(p.getCreatedAt());
+        assertThat(entity.getUpdatedAt()).isEqualTo(p.getUpdatedAt());
     }
 
     @Test
-    void deveConverterEntityParaDomain() {
+    void toDomainDeveCopiarTodosOsCampos() {
         UUID id = UUID.randomUUID();
-        UUID pedidoId = UUID.randomUUID();
-        Instant createdAt = Instant.parse("2026-05-21T10:00:00Z");
-        Instant updatedAt = Instant.parse("2026-05-21T10:01:00Z");
+        Instant criado = Instant.parse("2026-01-01T10:00:00Z");
+        Instant atualizado = Instant.parse("2026-01-02T11:00:00Z");
         PagamentoJpaEntity entity = new PagamentoJpaEntity(
-                id,
-                pedidoId,
-                new BigDecimal("50.00"),
-                StatusPagamento.APROVADO,
-                3,
-                null,
-                createdAt,
-                updatedAt
-        );
+                id, PEDIDO_ID, new BigDecimal("42.00"),
+                StatusPagamento.APROVADO, 2, "motivo", criado, atualizado);
 
-        Pagamento pagamento = PagamentoMapper.toDomain(entity);
+        Pagamento p = PagamentoMapper.toDomain(entity);
 
-        assertThat(pagamento.getId()).isEqualTo(id);
-        assertThat(pagamento.getPedidoId()).isEqualTo(pedidoId);
-        assertThat(pagamento.getValor()).isEqualByComparingTo("50.00");
-        assertThat(pagamento.getStatus()).isEqualTo(StatusPagamento.APROVADO);
-        assertThat(pagamento.getTentativas()).isEqualTo(3);
-        assertThat(pagamento.getMotivoFalha()).isNull();
-        assertThat(pagamento.getCreatedAt()).isEqualTo(createdAt);
-        assertThat(pagamento.getUpdatedAt()).isEqualTo(updatedAt);
+        assertThat(p.getId()).isEqualTo(id);
+        assertThat(p.getPedidoId()).isEqualTo(PEDIDO_ID);
+        assertThat(p.getValor()).isEqualByComparingTo("42.00");
+        assertThat(p.getStatus()).isEqualTo(StatusPagamento.APROVADO);
+        assertThat(p.getTentativas()).isEqualTo(2);
+        assertThat(p.getMotivoFalha()).isEqualTo("motivo");
+        assertThat(p.getCreatedAt()).isEqualTo(criado);
+        assertThat(p.getUpdatedAt()).isEqualTo(atualizado);
     }
 
-    private static Pagamento pagamento() {
-        return new Pagamento(
-                UUID.randomUUID(),
-                UUID.randomUUID(),
-                new BigDecimal("50.00"),
-                StatusPagamento.PENDENTE,
-                2,
-                "timeout",
-                Instant.parse("2026-05-21T10:00:00Z"),
-                Instant.parse("2026-05-21T10:01:00Z")
-        );
+    @Test
+    void roundTripDevePreservarTodosOsCampos() {
+        Pagamento original = new Pagamento(PEDIDO_ID, new BigDecimal("100.00"));
+        original.incrementarTentativas();
+        original.marcarComoPendente("falha temporaria");
+
+        Pagamento reconvertido = PagamentoMapper.toDomain(PagamentoMapper.toEntity(original));
+
+        assertThat(reconvertido.getId()).isEqualTo(original.getId());
+        assertThat(reconvertido.getStatus()).isEqualTo(original.getStatus());
+        assertThat(reconvertido.getTentativas()).isEqualTo(original.getTentativas());
+        assertThat(reconvertido.getMotivoFalha()).isEqualTo(original.getMotivoFalha());
     }
 }

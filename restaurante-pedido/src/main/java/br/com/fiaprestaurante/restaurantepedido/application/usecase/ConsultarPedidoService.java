@@ -34,8 +34,10 @@ public class ConsultarPedidoService implements ConsultarPedidoUseCase {
     /** {@inheritDoc} */
     @Override
     @Transactional(readOnly = true)
-    public Optional<PedidoResponse> porId(UUID pedidoId) {
-        return pedidoRepository.buscarPorId(pedidoId).map(PedidoResponse::from);
+    public Optional<PedidoResponse> porId(UUID pedidoId, UUID clienteId) {
+        return pedidoRepository.buscarPorId(pedidoId)
+                .filter(p -> p.getClienteId().equals(clienteId))
+                .map(PedidoResponse::from);
     }
 
     /** {@inheritDoc} */
