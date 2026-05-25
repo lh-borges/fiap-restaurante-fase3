@@ -33,7 +33,7 @@ os 8 serviços do `docker-compose.yml`, com perfil enxuto. Totais:
 | `procpag` | 256 MB | 0.5 | — |
 | `usuario-autenticacao` | 768 MB | 1.0 | 384 MB |
 | `restaurante-pedido` | 768 MB | 1.0 | 384 MB |
-| `pagamento` | 768 MB | 1.0 | 384 MB |
+| `pagamento-service` | 768 MB | 1.0 | 384 MB |
 | `restaurante-service` | 768 MB | 1.0 | 384 MB |
 | **Total** | **~5.7 GB → ~3.5 GB** após otimização | **7.5** | **~2.4 GB** |
 

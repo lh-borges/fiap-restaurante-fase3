@@ -209,7 +209,7 @@ Mostre os 8 containers `(healthy)` ou `Up`.
 
 ## Bloco 4 · 5:30–7:00 · Demo de resiliencia
 
-**Setup:** terminal + Postman + segundo terminal com `docker logs -f pagamento`.
+**Setup:** terminal + Postman + segundo terminal com `docker logs -f pagamento-service`.
 
 ### 4.1 · Derrubar o procpag (15s)
 
@@ -243,12 +243,12 @@ docker stop procpag
 docker start procpag
 ```
 
-> "Procpag de volta. Tem um worker `@Scheduled` no `pagamento`
+> "Procpag de volta. Tem um worker `@Scheduled` no `pagamento-service`
 > que roda a cada 30 segundos, busca os pendentes e tenta de novo."
 
 **Aguarde ~30-40s.** Mostre os logs:
 ```bash
-docker logs -f pagamento
+docker logs -f pagamento-service
 ```
 
 > "Olha aqui — *'Reprocessando pedido pendente... aprovado!'*. E
@@ -324,18 +324,18 @@ curl http://localhost:8083/actuator/circuitbreakers
 
 ### 6.1 · Hexagonal pura (20s)
 
-**Abrir** `pagamento/src/main/java/.../domain/`.
+**Abrir** `pagamento-service/src/main/java/.../domain/`.
 
 > "Pasta `domain`: zero imports de Spring, JPA ou Kafka. So Java
 > puro."
 
-**Abrir** `pagamento/.../application/port/output/`.
+**Abrir** `pagamento-service/.../application/port/output/`.
 
 > "Ports — interfaces. Implementadas em `adapter/outbound`."
 
 ### 6.2 · Resilience4j declarativo (20s)
 
-**Abrir** `pagamento/.../adapter/outbound/http/ExternalPaymentClient.java`.
+**Abrir** `pagamento-service/.../adapter/outbound/http/ExternalPaymentClient.java`.
 
 > "Olha as anotacoes: `@CircuitBreaker`, `@Retry`. **Toda a logica
 > de resiliencia esta nas anotacoes** — o codigo de negocio fica
@@ -416,7 +416,7 @@ docker compose up -d --build
 docker compose ps
 
 # Logs do pagamento (mostrar retries e CB durante demo de resiliencia)
-docker logs -f pagamento
+docker logs -f pagamento-service
 
 # Demo de resiliencia
 docker stop procpag
@@ -499,7 +499,7 @@ quando faz parte da introducao geral.
 - [ ] Login feito (token em `{{token}}`)
 - [ ] Kafka UI aberto em aba separada
 - [ ] GraphiQL `:8084` aberto em outra aba (token DONO_RESTAURANTE colado em Headers)
-- [ ] Segundo terminal aberto para `docker logs -f pagamento`
+- [ ] Segundo terminal aberto para `docker logs -f pagamento-service`
 - [ ] [auditoria-conformidade.md](auditoria-conformidade.md) aberto em uma aba (consulta rapida se esquecer ID)
 - [ ] Audio + camera testados (~5 min de gravacao de teste)
 - [ ] Cronometro do celular pronto (manter o ritmo de 1 min/bloco)

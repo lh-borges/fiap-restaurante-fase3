@@ -66,7 +66,7 @@ graph TB
 - **Consome:** `pagamento.aprovado`, `pagamento.pendente`,
   `pedido.em-preparo`, `pedido.pronto`.
 
-### `pagamento` (porta 8083)
+### `pagamento-service` (porta 8083)
 
 - **Função:** processamento de cobrança contra o `procpag` com
   resiliência (Circuit Breaker + Retry + Timeout + Fallback);

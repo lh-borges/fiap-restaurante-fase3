@@ -43,10 +43,10 @@ Serialização: JSON via Spring Kafka + Jackson 2 (`jackson-databind`
 ### Positivas
 
 - **Desacoplamento total entre bounded contexts:** o `restaurante-pedido`
-  não importa nada do módulo `pagamento` e vice-versa — eles só
+  não importa nada do módulo `pagamento-service` e vice-versa — eles só
   conhecem o **contrato dos eventos**.
 - **Habilita resiliência (req. 4.5/4.6):** quando o gateway de
-  pagamento cai, o `pagamento` publica `pagamento.pendente` e a vida
+  pagamento cai, o `pagamento-service` publica `pagamento.pendente` e a vida
   segue; o worker `@Scheduled` reprocessa quando o gateway volta.
 - **Replay:** se um consumer tiver bug, basta corrigir e reprocessar
   do offset desejado.
@@ -70,7 +70,7 @@ Serialização: JSON via Spring Kafka + Jackson 2 (`jackson-databind`
 ## Alternativas consideradas
 
 - **Chamadas REST síncronas:** o `restaurante-pedido` chamaria o
-  `pagamento` diretamente. Quando o gateway externo do pagamento
+  `pagamento-service` diretamente. Quando o gateway externo do pagamento
   cair, o request do cliente falha. **Não atende o req. 4.5**.
 - **RabbitMQ:** broker tradicional, AMQP, mais simples para low-volume.
   Kafka ganha quando se quer replay e particionamento. Padrão de

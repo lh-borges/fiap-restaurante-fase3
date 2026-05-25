@@ -22,7 +22,7 @@ têm modelos de dados muito distintos, ritmos de evolução diferentes
 Implementar **4 microsserviços independentes**, cada um com:
 
 - Próprio módulo Maven (`usuario-autenticacao`, `restaurante-pedido`,
-  `pagamento`, `restaurante-service`)
+  `pagamento-service`, `restaurante-service`)
 - Próprio container Docker
 - Próprio banco MySQL (`auth_db`, `pedido_db`, `pagamento_db`, `cozinha_db`)
 - Próprio entrypoint Spring Boot

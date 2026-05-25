@@ -65,7 +65,7 @@ sequenceDiagram
 
 - **Cliente nunca recebe erro:** o passo 1 retorna `CONFIRMADO`
   normalmente, mesmo com o gateway fora. A falha fica isolada no
-  `pagamento`.
+  `pagamento-service`.
 - **Circuit Breaker abre rápido:** após 5 chamadas com 50% de
   falha (configurado no `application.properties` do pagamento),
   o CB abre. Chamadas subsequentes são **rejeitadas em ms** via
@@ -93,7 +93,7 @@ docker start procpag                         # gateway volta
 Logs úteis durante a demo:
 
 ```bash
-docker logs -f pagamento                                   # retries e CB
+docker logs -f pagamento-service                                   # retries e CB
 curl http://localhost:8083/actuator/circuitbreakers        # estado do CB
 curl http://localhost:8083/actuator/scheduledtasks         # confirma worker ativo
 ```

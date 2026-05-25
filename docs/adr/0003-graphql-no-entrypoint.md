@@ -22,7 +22,7 @@ GraphiQL embutido), com schema próprio por serviço:
 
 - `usuario-autenticacao` em `:8081/graphql`
 - `restaurante-pedido` em `:8082/graphql`
-- `pagamento` em `:8083/graphql`
+- `pagamento-service` em `:8083/graphql`
 - `restaurante-service` em `:8084/graphql`
 
 Os schemas `.graphqls` ficam em `src/main/resources/graphql/`. Cada
@@ -38,7 +38,7 @@ em `/swagger-ui.html` de cada serviço.
 ### Positivas
 
 - **Cliente decide os campos:** uma única query pode retornar `id` +
-  `status` ou `id` + `cliente` + `itens` + `pagamento` sem mexer no
+  `status` ou `id` + `cliente` + `itens` + `pagamento-service` sem mexer no
   servidor.
 - **Schema autodocumentado:** GraphiQL embutido lista todas as
   queries e mutations disponíveis com tipagem.

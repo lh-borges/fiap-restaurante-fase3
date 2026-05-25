@@ -502,14 +502,14 @@ def build(filename: str):
         ["4.1", "Cadastro e autenticação de clientes", "usuario-autenticacao"],
         ["4.2", "Criação e confirmação de pedido", "restaurante-pedido"],
         ["4.3", "Consulta de pedido por ID e listagem por cliente", "restaurante-pedido"],
-        ["4.4", "Processamento de pagamento via gateway externo", "pagamento + procpag"],
-        ["4.5", "Marcação de pagamento pendente em falha", "pagamento (Resilience4j)"],
-        ["4.6", "Reprocessamento automático ao restabelecimento", "pagamento (@Scheduled)"],
+        ["4.4", "Processamento de pagamento via gateway externo", "pagamento-service + procpag"],
+        ["4.5", "Marcação de pagamento pendente em falha", "pagamento-service (Resilience4j)"],
+        ["4.6", "Reprocessamento automático ao restabelecimento", "pagamento-service (@Scheduled)"],
         ["4.7", "Atualização automática do status do pedido", "restaurante-pedido (consumer)"],
         ["5.1", "Arquitetura em múltiplos serviços", "4 microsserviços"],
         ["5.2", "Spring Security + JWT (RS256)", "todos os serviços de aplicação"],
         ["5.3", "Comunicação assíncrona via Kafka", "6 tópicos"],
-        ["5.4", "Resiliência (CB + Retry + Timeout + Fallback)", "pagamento.ExternalPaymentClient"],
+        ["5.4", "Resiliência (CB + Retry + Timeout + Fallback)", "pagamento-service.ExternalPaymentClient"],
         ["5.5", "Clean / Hexagonal Architecture", "todos os 4 módulos"],
     ]
     story.append(table_simple(req_data, col_widths=[1.0 * cm, 8.5 * cm, 6.5 * cm]))
@@ -572,7 +572,7 @@ def build(filename: str):
                                           pedido.criado    |pagamento.*
                                                   v        |
                                             +-----------------+
-                                            |   pagamento     | :8083
+                                            | pagamento-service| :8083
                                             |                 |
                                             +-----------------+
                                                   |
@@ -625,7 +625,7 @@ def build(filename: str):
         body,
     ))
 
-    story.append(p("3.2.3 pagamento", h3))
+    story.append(p("3.2.3 pagamento-service", h3))
     story.append(p(
         "Consome o evento <font face='Courier'>pedido.criado</font> "
         "e tenta processar a cobrança contra o gateway externo "
@@ -677,9 +677,9 @@ def build(filename: str):
     ))
     topicos_data = [
         ["Tópico", "Publicador", "Consumidor(es)"],
-        ["pedido.criado", "restaurante-pedido", "pagamento"],
-        ["pagamento.aprovado", "pagamento", "restaurante-pedido"],
-        ["pagamento.pendente", "pagamento", "restaurante-pedido"],
+        ["pedido.criado", "restaurante-pedido", "pagamento-service"],
+        ["pagamento.aprovado", "pagamento-service", "restaurante-pedido"],
+        ["pagamento.pendente", "pagamento-service", "restaurante-pedido"],
         ["pedido.pronto-para-cozinha", "restaurante-pedido", "restaurante-service"],
         ["pedido.em-preparo", "restaurante-service", "restaurante-pedido"],
         ["pedido.pronto", "restaurante-service", "restaurante-pedido"],
@@ -767,7 +767,7 @@ def build(filename: str):
         body,
     ))
     story.append(p(
-        "<b>4.</b> O <i>pagamento</i> consome "
+        "<b>4.</b> O <i>pagamento-service</i> consome "
         "<font face='Courier'>pedido.criado</font>, persiste um "
         "registro de pagamento e chama o procpag via HTTP. A "
         "chamada é envolvida por Resilience4j (CB + Retry + "
@@ -775,7 +775,7 @@ def build(filename: str):
         body,
     ))
     story.append(p(
-        "<b>5.</b> O <i>pagamento</i> persiste o pagamento como "
+        "<b>5.</b> O <i>pagamento-service</i> persiste o pagamento como "
         "APROVADO e publica <font face='Courier'>pagamento.aprovado</font>.",
         body,
     ))
@@ -841,7 +841,7 @@ def build(filename: str):
 
     story.append(p("5.2 Worker de reprocessamento", h2))
     story.append(p(
-        "Vive exclusivamente no módulo <i>pagamento</i>. É um "
+        "Vive exclusivamente no módulo <i>pagamento-service</i>. É um "
         "<font face='Courier'>@Scheduled</font> que executa a "
         "cada 30 segundos (configurável em "
         "<font face='Courier'>pagamento.reprocess.fixed-delay-ms</font>), "
@@ -853,11 +853,11 @@ def build(filename: str):
         body,
     ))
     story.append(p(
-        "<b>Por que o worker está no pagamento, e não no "
+        "<b>Por que o worker está no pagamento-service, e não no "
         "restaurante-pedido?</b> O worker opera sobre dados do "
         "próprio bounded context (registros de pagamento). "
         "Reprocessar significa tentar de novo a chamada ao "
-        "gateway, integração que vive no pagamento e em mais "
+        "gateway, integração que vive no pagamento-service e em mais "
         "lugar nenhum. Manter o worker fora do "
         "<i>restaurante-pedido</i> preserva a separação de "
         "responsabilidades: o <i>restaurante-pedido</i> apenas "
@@ -989,7 +989,7 @@ def build(filename: str):
         ["Módulo", "Testes", "Cobertura"],
         ["usuario-autenticacao", "63", "Domain, use cases, JWT, gRPC, GraphQL, smoke"],
         ["restaurante-pedido", "126", "Domain, 4 consumers, 2 publishers, GraphQL, smoke"],
-        ["pagamento", "57", "Domain, Resilience4j, worker, GraphQL, smoke"],
+        ["pagamento-service", "57", "Domain, Resilience4j, worker, GraphQL, smoke"],
         ["restaurante-service", "39", "Domain, 4 use cases, JPA, Kafka, GraphQL, smoke"],
         ["TOTAL", "285", ""],
     ]
@@ -1045,7 +1045,7 @@ def build(filename: str):
         "endpoints <font face='Courier'>/actuator/health</font>, "
         "<font face='Courier'>/actuator/info</font> e "
         "<font face='Courier'>/actuator/metrics</font>. O serviço "
-        "<i>pagamento</i> expõe adicionalmente "
+        "<i>pagamento-service</i> expõe adicionalmente "
         "<font face='Courier'>/actuator/circuitbreakers</font> "
         "(estado dos breakers Resilience4j), "
         "<font face='Courier'>/actuator/retries</font> e "

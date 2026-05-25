@@ -24,11 +24,11 @@ no Kafka.
 
 Adotar **Resilience4j 2.3.0** (`resilience4j-spring-boot3` +
 `resilience4j-reactor`), aplicando todas as 4 técnicas como
-**anotações** no método de integração do `pagamento`
+**anotações** no método de integração do `pagamento-service`
 (`ExternalPaymentClient`):
 
 ```properties
-# pagamento/src/main/resources/application.properties (resumo)
+# pagamento-service/src/main/resources/application.properties (resumo)
 resilience4j.circuitbreaker.instances.paymentService.sliding-window-size=5
 resilience4j.circuitbreaker.instances.paymentService.failure-rate-threshold=50
 resilience4j.circuitbreaker.instances.paymentService.wait-duration-in-open-state=30s
@@ -46,7 +46,7 @@ resilience4j.timelimiter.instances.paymentService.cancel-running-future=true
 ```
 
 O fallback publica `pagamento.pendente` no Kafka e marca o pagamento
-como `PENDENTE`. Um worker `@Scheduled` no próprio módulo `pagamento`
+como `PENDENTE`. Um worker `@Scheduled` no próprio módulo `pagamento-service`
 reprocessa pendentes a cada 30 segundos.
 
 ## Consequências
