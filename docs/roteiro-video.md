@@ -1,64 +1,97 @@
 # Roteiro — Video de apresentacao (Tech Challenge Fase 3)
 
-> **Duracao alvo:** 10 minutos. **Ritmo:** ~150 palavras/min. Use o
-> roteiro como guia (nao precisa ler literalmente).
-
-## Estrutura auditavel
-
-Cada bloco termina com **CHECKPOINT** listando os requisitos da
-spec cobertos no bloco — ID conforme a
-[auditoria de conformidade](auditoria-conformidade.md). O
-avaliador consegue marcar os itens em tempo real enquanto assiste.
-
-| Bloco | Tempo | Tema |
-|---|---|---|
-| 1 | 0:00–1:00 | Apresentacao + problema + **arquitetura escolhida e POR QUE** |
-| 2 | 1:00–2:30 | Visao tecnica da arquitetura |
-| 3 | 2:30–5:30 | Demo happy path completo (cadastro -> entrega) |
-| 4 | 5:30–7:00 | Demo de resiliencia (gateway off -> reprocesso) |
-| 5 | 7:00–8:00 | Massa de testes + suite automatizada |
-| 6 | 8:00–9:00 | Tour rapido no codigo |
-| 7 | 9:00–10:00 | Encerramento + recap dos requisitos |
-
-## Antes de gravar
-
-1. `docker compose down -v && docker compose up -d --build` — espere todos os containers ficarem `(healthy)` (~3 min).
-2. Abra **lado a lado**: terminal, Postman (com environment `fiap-fase-3-restaurante` ATIVO), navegador com 3 abas: Kafka UI (`http://localhost:8085`), GraphiQL pedido (`http://localhost:8082/graphiql`), GraphiQL cozinha (`http://localhost:8084/graphiql`).
-3. **IDE aberta** no projeto (VSCode ou IntelliJ).
-4. **Faca um login no Postman** antes de comecar a gravar — popula `{{token}}` e voce nao queima 30s do video logando ao vivo.
-5. Segundo terminal pronto para `docker logs -f`.
-6. Tenha **a auditoria de conformidade aberta** ([docs/auditoria-conformidade.md](auditoria-conformidade.md)) para consultar se esquecer algum ID.
+> **Duracao alvo:** 10 minutos. **Ritmo:** ~150 palavras/min.
+>
+> Este roteiro foi escrito com um objetivo duplo: (1) servir de
+> guia durante a gravacao, e (2) **funcionar como material de
+> estudo** para quem assistir depois — colega de turma, dev novo
+> na equipe, ou voce mesmo daqui a 6 meses. Por isso, cada bloco
+> tem **uma intro conceitual curta** antes da demo: explica
+> *por que* aquele padrao existe, nao so o que ele faz.
 
 ---
 
-## Bloco 1 · 0:00–1:00 · Apresentacao + arquitetura escolhida (e por que)
+## Como ler este roteiro
 
-**Setup de tela:** slide simples com o titulo do projeto e diagrama de blocos (pode ser screenshot do diagrama em [`diagramas/componentes.md`](diagramas/componentes.md) renderizado no GitHub).
+- **As falas** sao o que voce diria na frente da camera. Pode ler,
+  pode improvisar — o importante eh a ideia.
+- **Os blocos de demo** tem o comando exato e a tela esperada.
+- **Os "💡 Conceito"** sao explicacoes curtas para quem nunca viu
+  aquilo. Mantenha durante a gravacao se houver tempo; corte para
+  ganhar segundos.
+- **Os "✓ Checkpoint"** ao final de cada bloco listam os
+  requisitos cobertos (IDs da
+  [auditoria de conformidade](auditoria-conformidade.md)). Sao para
+  o avaliador acompanhar; nao precisa ler em voz alta.
 
-**Falar (~150 palavras):**
+## Estrutura
+
+| Bloco | Tempo | Tema | Conceitos centrais |
+|---|---|---|---|
+| 1 | 0:00–1:00 | Apresentacao + **POR QUE microsservicos** | Bounded context, motivacao |
+| 2 | 1:00–2:30 | Visao tecnica via C4 | Modelo C4, arquitetura hexagonal, Kafka |
+| 3 | 2:30–5:30 | Demo do fluxo completo | JWT, GraphQL, eventos assincronos |
+| 4 | 5:30–7:00 | Demo de resiliencia | Circuit Breaker, Retry, Fallback, idempotencia |
+| 5 | 7:00–8:00 | Testes (massa + suite) | Piramide de testes, H2/EmbeddedKafka |
+| 6 | 8:00–9:00 | Tour no codigo | Hexagonal puro, anotacoes Resilience4j, AppCDS |
+| 7 | 9:00–10:00 | Encerramento + recap | Decisoes-chave + ADRs |
+
+---
+
+## Antes de gravar (checklist de setup)
+
+1. `docker compose down -v && docker compose up -d --build` — espere
+   todos os containers ficarem `(healthy)` (~3 min).
+2. **Janelas lado a lado:**
+   - Terminal 1 (comandos)
+   - Terminal 2 com `docker logs -f pagamento-service` rodando
+   - Postman com environment `fiap-fase-3-restaurante` **ATIVO**
+   - Navegador com 3 abas: Kafka UI `:8085`, GraphiQL pedido
+     `:8082/graphiql`, GraphiQL cozinha `:8084/graphiql`
+3. **Faca um login no Postman antes de comecar a gravar** — popula
+   `{{token}}` e poupa 30 segundos.
+4. IDE aberta no projeto (VSCode ou IntelliJ).
+5. Audio + camera testados; cronometro do celular pronto.
+6. [auditoria-conformidade.md](auditoria-conformidade.md) aberta
+   numa aba — consulta rapida se esquecer ID de requisito.
+
+---
+
+## Bloco 1 · 0:00–1:00 · Apresentacao + por que microsservicos
+
+**Tela:** slide simples com titulo + screenshot do
+[`docs/diagramas/c4-contexto.png`](diagramas/c4-contexto.png).
+
+### Falar
 
 > "Ola! Sou o Danilo Fernando, falando em nome do grupo formado por
-> Danilo Fernando de Paula e Silva, Gilmar da Costa Moraes Junior,
-> Juliana Maria Dal Olio Braz, Luis Henrique Silveira Borges e
-> Thiago de Jesus Cordeiro. Este eh o **Tech Challenge da Fase 3**
-> da PosTech FIAP.
+> mim, Gilmar Junior, Juliana Braz, Luis Henrique Borges e Thiago
+> Cordeiro. Este eh o Tech Challenge da Fase 3 da PosTech FIAP.
 >
-> O desafio: construir um sistema de pedidos online para
-> restaurante. O cliente cadastra-se, autentica, monta o pedido,
-> confirma — e o sistema processa o pagamento contra um
-> **gateway externo eventualmente indisponivel**. Logo, precisa de
-> **resiliencia**. Depois que o pagamento eh aprovado, o pedido vai
-> para a cozinha, que prepara e finaliza.
+> **O desafio em uma frase:** construir um sistema de pedidos
+> online para restaurante, que precisa funcionar **mesmo quando
+> o gateway de pagamento esta fora do ar**.
 >
-> Escolhemos **arquitetura de microsservicos** em vez de monolito
-> porque os quatro contextos identificados — usuario, pedido,
-> pagamento e cozinha — tem modelos de dados distintos, ritmos de
-> mudanca diferentes e perfis de escala assimetricos. **Cada
-> microsservico evolui isolado e tem seu proprio banco.** Usamos
-> **Apache Kafka** como cola assincrona — eh o que torna a
-> resiliencia possivel: quando o gateway cai, o pedido nao trava."
+> O quebra-cabecas tem quatro pecas naturais: cadastro de cliente,
+> ciclo do pedido, processamento de pagamento, e producao pela
+> cozinha. Cada uma com regras diferentes, ritmos de mudanca
+> diferentes, e perfis de carga diferentes. Em vez de empacotar
+> tudo num monolito, escolhemos **quatro microsservicos
+> independentes** — um para cada bounded context. Isso permite
+> evoluir e escalar cada um isoladamente."
 
-**CHECKPOINT — bloco 1:**
+### 💡 Conceito — Bounded Context
+
+> "Bounded context eh um termo do Domain-Driven Design. Significa
+> 'fronteira de significado'. A palavra `Pedido`, por exemplo,
+> tem um significado para quem cobra (precisa de `valor`,
+> `pagamentoId`) e outro para quem cozinha (precisa de
+> `produto`, `quantidade`, mas nao se importa com preco).
+> Modelar isso como dois agregados separados em dois
+> microsservicos diferentes evita um modelo 'inchado' que tenta
+> agradar todo mundo."
+
+**✓ Checkpoint — bloco 1:**
 
 | ✓ | ID | Requisito |
 |---|---|---|
@@ -67,149 +100,207 @@ avaliador consegue marcar os itens em tempo real enquanto assiste.
 
 ---
 
-## Bloco 2 · 1:00–2:30 · Visao tecnica da arquitetura
+## Bloco 2 · 1:00–2:30 · Arquitetura via C4
 
-**Setup:** abra [`docs/diagramas/componentes.md`](diagramas/componentes.md) no GitHub (renderiza Mermaid) ou um screenshot de tela cheia.
+**Tela:** [`docs/diagramas/c4-containers.png`](diagramas/c4-containers.png) em tela cheia.
 
-**Falar:**
+### Falar
 
-> "A arquitetura segue tres principios.
+> "Este eh o **diagrama C4 nivel 2**, que mostra a topologia
+> tecnica. Quatro microsservicos Spring Boot 4 com Java 25, mais
+> a infra compartilhada — MySQL e Kafka — e o gateway externo
+> procpag.
 >
-> **Primeiro: hexagonal em cada modulo.** Domain isolado de
-> framework, application com use cases e ports, adapters para o
-> mundo externo. Voces verao no codigo: zero imports de Spring,
-> JPA ou Kafka dentro do pacote `domain`. Isso permite testar
-> regra de negocio sem `@SpringBootTest` e trocar adapter sem
-> tocar regra.
+> Vamos do mais simples para o mais sutil.
 >
-> **Segundo: bounded contexts separados.** Cada microsservico tem
-> seu proprio MySQL database — `auth_db`, `pedido_db`,
-> `pagamento_db` e `cozinha_db`. Nada compartilhado a nivel de
-> dados, so contratos.
+> **Tres protocolos de rede em uso, cada um com proposito claro:**
 >
-> **Terceiro: Kafka como cola assincrona.** Seis topicos: tres do
-> fluxo principal — `pedido.criado`, `pagamento.aprovado`,
-> `pagamento.pendente` — e tres para o fluxo da cozinha:
-> `pedido.pronto-para-cozinha`, `pedido.em-preparo` e
-> `pedido.pronto`.
+> Primeiro, **GraphQL com JWT**, em verde por cima. Eh por aqui que
+> o cliente fala com o sistema. Escolhemos GraphQL em vez de REST
+> porque o cliente decide quais campos quer em cada query — uma
+> mesma query pode trazer so o status do pedido ou tudo: itens,
+> preco, pagamento. Sem versionamento de endpoint.
 >
-> O sistema inteiro sobe com **um unico comando**:
-> `docker compose up -d --build`. Oito containers, todos com
-> healthcheck. Kafka roda em **modo KRaft** — sem Zookeeper, mais
-> leve, mais rapido."
+> Segundo, **gRPC** entre o `restaurante-pedido` e o
+> `usuario-autenticacao`. Eh uma chamada interna, sincrona,
+> com contrato fechado. Protobuf eh binario — tres a dez vezes
+> menor que JSON — e o stub gerado da type-safety em tempo de
+> compilacao. Errei o contrato? Quebra no `mvn package`, nao em
+> producao.
+>
+> Terceiro, e **a decisao mais importante do projeto: Kafka**,
+> para tudo que eh assincrono. Seis topicos."
 
-**Comando opcional (mostrar na tela):**
+### 💡 Conceito — por que Kafka muda tudo
+
+> "Se o `restaurante-pedido` ligasse direto pro `pagamento-service`
+> via REST, esperando a resposta sincrona, o que aconteceria
+> quando o gateway externo caisse? O request do cliente ficaria
+> pendurado, daria timeout, e o pedido falharia.
+>
+> Com Kafka no meio, o `restaurante-pedido` **publica o evento e
+> segue a vida**. O cliente recebe `CONFIRMADO` em milissegundos.
+> O pagamento processa quando puder. Se o gateway esta fora?
+> O `pagamento-service` reprocessa depois, sozinho. Isso eh o
+> que possibilita a resiliencia que vamos demonstrar no bloco 4."
+
+### 💡 Conceito — arquitetura hexagonal
+
+> "Cada um dos quatro microsservicos por dentro segue **arquitetura
+> hexagonal** (tambem chamada Ports and Adapters). O dominio
+> — as regras de negocio puras — fica isolado de framework. Zero
+> imports de Spring, JPA ou Kafka dentro do pacote `domain`.
+> Isso significa que **testar regra de negocio dispensa
+> `@SpringBootTest`** — eh JUnit puro com Mockito. E trocar Kafka
+> por RabbitMQ amanha eh mudar um adapter, nao a regra."
+
+### Demonstracao rapida
+
 ```bash
 docker compose ps
 ```
-Mostre os 8 containers `(healthy)` ou `Up`.
 
-**CHECKPOINT — bloco 2:**
+> "Oito containers, todos `(healthy)`. Subiu tudo com um unico
+> comando: `docker compose up -d --build`."
+
+**✓ Checkpoint — bloco 2:**
 
 | ✓ | ID | Requisito |
 |---|---|---|
 | [ ] | 3.c | `compose.yml` que sobe tudo em um comando |
-| [ ] | 3.d | Diagrama da arquitetura (componentes) |
+| [ ] | 3.d | Diagrama da arquitetura (C4 + componentes) |
 | [ ] | 5.1.f | Diagrama de componentes/sequencia/C4 |
 | [ ] | 5.3.a–c | 3 topicos Kafka exigidos |
 | [ ] | 5.5.a–b | Hexagonal aplicado em todos os modulos |
 
 ---
 
-## Bloco 3 · 2:30–5:30 · Demo happy path (cadastro -> entrega)
+## Bloco 3 · 2:30–5:30 · Demo do fluxo completo
 
-**Setup:** Postman + Kafka UI + GraphiQL `:8084` lado a lado.
+**Tela:** Postman + Kafka UI + GraphiQL `:8084` lado a lado.
 
-### 3.1 · Login (15s)
+### 3.1 · Login e JWT (20s)
 
-> "Login como cliente comum. Postman, pasta `1. Autenticacao`,
-> *Login como Usuario*. O JWT eh salvo em `{{token}}`."
+```
+Postman -> 1. Autenticacao -> Login como Usuario
+```
 
-**Mostrar:** request → response com token; mencionar que o JWT eh
-**RS256** (assinatura assimetrica) — chave privada so vive no
-`usuario-autenticacao`.
+> "Faco login como cliente. Recebo um **JWT assinado em RS256**."
 
-**CHECK rapido:**
-- 4.1.a Criar cliente *(ja existia no env, mostrar a request salva)*
-- 4.1.b Autenticar cliente
-- 5.2.a Login gerando JWT
+### 💡 Conceito — por que RS256 e nao HS256
+
+> "RS256 eh assinatura **assimetrica**. Quem assina (o
+> `usuario-autenticacao`) tem a chave privada. Quem valida (os
+> outros tres servicos) tem so a chave publica. Resultado:
+> mesmo que o `restaurante-pedido` seja comprometido, o atacante
+> nao consegue **emitir** tokens novos — so verificar. Com HS256
+> (chave compartilhada), todos poderiam emitir. RS256 limita o
+> blast radius."
 
 ### 3.2 · Criar pedido (30s)
 
-> "Crio o pedido. Mando dois itens — um burger e uma batata frita.
-> Repare que **nao envio o `clienteId`**: ele eh extraido do JWT
-> no servidor, conforme o requisito 5.2 — *'o ID do cliente deve
-> vir do token'*."
+```
+Postman -> 2. Pedidos -> Criar Pedido
+```
 
-**Mostrar:** response com `id`, `valorTotal` calculado, `status: CRIADO`.
+> "Crio o pedido com dois itens. **Repare que nao envio o
+> `clienteId`** — ele eh extraido do JWT no servidor. Eh o
+> requisito 5.2: 'o ID do cliente deve vir do token'. Isso eh
+> seguranca elementar: se o cliente pudesse mandar qualquer
+> clienteId, eu pediria pedidos no nome dos outros."
 
-### 3.3 · Confirmar pedido (30s)
+Mostre a resposta: `id`, `valorTotal` calculado, `status: CRIADO`.
 
-> "Confirmo o pedido. Isso publica o evento `pedido.criado` no
-> Kafka."
+### 3.3 · Confirmar pedido (40s)
+
+```
+Postman -> 2. Pedidos -> Confirmar Pedido
+```
+
+> "Confirmo. Isso publica o evento `pedido.criado` no Kafka."
 
 **Alt-tab para Kafka UI:**
 
-> "Aqui — topico `pedido.criado`, mensagem chegou."
+> "Aqui — topico `pedido.criado`, a mensagem chegou. O
+> `pagamento-service` ja esta consumindo. Ele vai chamar o
+> procpag, receber a aprovacao, e publicar `pagamento.aprovado`.
+> O `restaurante-pedido` consome esse evento e atualiza o status
+> do pedido para `PAGO`."
 
-**Alt-tab de volta para Postman.**
+### 3.4 · Ver status PAGO (15s)
 
-> "Em alguns segundos, o `pagamento-service` vai consumir, chamar
-> o procpag, receber a aprovacao, e publicar `pagamento.aprovado`.
-> O `restaurante-pedido` consome e atualiza o status."
+```
+Postman -> 2. Pedidos -> Pedido por ID
+```
 
-### 3.4 · Verificar status PAGO (15s)
+> "Status `PAGO`. **Sem que eu tenha clicado em mais nada.** O
+> evento Kafka fez toda a coordenacao automatica."
 
-> "Rodando *Pedido por ID*... status `PAGO`. **Tudo automatico —
-> eu so confirmei o pedido.**"
+### 3.5 · Fluxo da cozinha (1 min 15s)
 
-### 3.5 · Fluxo da cozinha (1 min)
-
-> "Agora a parte nova — o `restaurante-service`. Quando o pedido
-> virou PAGO, o `restaurante-pedido` publicou outro evento:
+> "Agora a parte que vai alem do minimo da spec — o
+> `restaurante-service`, modulo opcional do item 5.1. Quando o
+> pedido virou PAGO, o `restaurante-pedido` publicou outro evento:
 > `pedido.pronto-para-cozinha`, com os itens (sem preco — a
-> cozinha nao se importa com isso)."
+> cozinha nao se importa com isso, eh outro bounded context)."
 
-**GraphiQL `localhost:8084`, logado como `DONO_RESTAURANTE`:**
+**GraphiQL `:8084`, logado como `DONO_RESTAURANTE`:**
 
-> "Consulto a `filaCozinha` — la esta o pedido, status `RECEBIDO`."
+```graphql
+query { filaCozinha { id pedidoId status } }
+```
 
-**Mutation:** `iniciarPreparo(pedidoCozinhaId: "...") { status }` → `EM_PREPARO`
+> "Aqui esta o pedido, status `RECEBIDO`. Sou o dono do
+> restaurante; vou iniciar o preparo."
 
-> "Status `EM_PREPARO`. O `restaurante-service` publicou
-> `pedido.em-preparo`, e o `restaurante-pedido` consumiu e
-> atualizou tambem."
+```graphql
+mutation { iniciarPreparo(pedidoCozinhaId: "<id>") { status } }
+```
 
-**Mutation:** `marcarComoPronto(pedidoCozinhaId: "...") { status }` → `PRONTO`
+> "Status `EM_PREPARO`. Isso publicou `pedido.em-preparo` no
+> Kafka, e o `restaurante-pedido` consumiu e refletiu o status
+> no agregado principal."
+
+```graphql
+mutation { marcarComoPronto(pedidoCozinhaId: "<id>") { status } }
+```
 
 > "`PRONTO`. Volto no Postman e consulto o pedido original... ele
-> tambem esta `PRONTO`. **Quatro microsservicos coordenados por
-> Kafka, sem nenhuma chamada sincrona entre eles.**"
+> tambem esta `PRONTO`. **Quatro microsservicos coordenados, com
+> zero chamada sincrona entre eles.** Pura mensageria assincrona."
 
-**CHECKPOINT — bloco 3:**
+**✓ Checkpoint — bloco 3:**
 
 | ✓ | ID | Requisito |
 |---|---|---|
-| [ ] | 4.1.a | Criar cliente |
-| [ ] | 4.1.b | Autenticar cliente |
+| [ ] | 4.1.a–b | Criar e autenticar cliente |
 | [ ] | 4.2.a–e | Criar pedido (clienteId do JWT, restaurante, itens, total, confirmacao) |
 | [ ] | 4.3.a | Consultar pedido por ID |
-| [ ] | 4.4.a–c | Processamento via gateway externo procpag |
+| [ ] | 4.4.a–c | Processamento via gateway externo |
 | [ ] | 4.7.a | Atualizacao automatica para PAGO |
 | [ ] | 4.7.b | (Opcional) Fluxo para servicos de producao (cozinha) |
 | [ ] | 5.1.d | (Opcional) `restaurante-service` implementado |
-| [ ] | 5.2.b | Perfis (USUARIO, DONO_RESTAURANTE) |
-| [ ] | 5.2.c | Endpoints protegidos com token |
-| [ ] | 5.2.d | ID do cliente vem do token |
-| [ ] | 5.3.a, e, g | Tópico `pedido.criado` publicado e consumido |
-| [ ] | 5.3.b | Tópico `pagamento.aprovado` |
-| [ ] | 5.3.h | Tópicos extras da cozinha |
+| [ ] | 5.2.a–d | JWT, perfis, endpoints protegidos, clienteId do token |
+| [ ] | 5.3.a, b, e, g, h | Tópicos Kafka principais e do fluxo cozinha |
 
 ---
 
 ## Bloco 4 · 5:30–7:00 · Demo de resiliencia
 
-**Setup:** terminal + Postman + segundo terminal com `docker logs -f pagamento-service`.
+**Tela:** terminal + Postman + segundo terminal com
+`docker logs -f pagamento-service`.
+
+### 💡 Conceito — por que resiliencia importa
+
+> "Toda integracao com sistema externo eh um ponto de risco. O
+> procpag aqui simula um gateway de pagamento real: ora aprova,
+> ora cai. Se a gente nao tratar isso, qualquer instabilidade
+> deles vira instabilidade nossa. **Cliente ve erro, vendas
+> param, suporte explode.**
+>
+> A boa noticia: existem **padroes consagrados** para isolar essa
+> falha — Circuit Breaker, Retry, Timeout, Fallback. Vamos ver
+> os quatro funcionando."
 
 ### 4.1 · Derrubar o procpag (15s)
 
@@ -217,99 +308,128 @@ Mostre os 8 containers `(healthy)` ou `Up`.
 docker stop procpag
 ```
 
-> "Procpag fora do ar. Vamos simular um cenario real onde o
-> gateway externo cai."
+> "Procpag fora. Vamos simular o gateway externo caindo."
 
 ### 4.2 · Criar e confirmar novo pedido (30s)
 
-> "Postman: novo pedido, confirmacao. O `pagamento-service` recebe,
-> tenta chamar o procpag, falha. **Resilience4j entra em acao:**
+```
+Postman -> Criar Pedido + Confirmar Pedido
+```
+
+> "Postman: novo pedido, confirmacao. O `pagamento-service`
+> recebe `pedido.criado`, tenta chamar o procpag, e ai entra em
+> acao o Resilience4j."
+
+**Aponte para o segundo terminal mostrando logs:**
+
+> "Olhem aqui — **Retry: 3 tentativas com backoff exponencial**
+> (2s, depois 4s, depois 8s). Depois de varias falhas
+> consecutivas, o **Circuit Breaker abre**. Ele eh basicamente
+> um disjuntor eletrico: detectou problema, corta a corrente,
+> nao tenta mais. Novas chamadas falham instantaneamente sem
+> nem tocar no procpag. Isso protege tudo — nao adianta seguir
+> martelando um servico que esta fora.
 >
-> - **Retry** — 3 tentativas com backoff exponencial
-> - **Timeout** — 5s por chamada (implementado no HTTP client)
-> - **Circuit Breaker** — depois de 5 falhas em 50%, abre o circuito
-> - **Fallback** — publica `pagamento.pendente`, marca pedido como `PENDENTE_PAGAMENTO`"
+> Quando todas as estrategias falham, entra o **Fallback**:
+> marca o pagamento como `PENDENTE` e publica `pagamento.pendente`
+> no Kafka. O `restaurante-pedido` consome e marca o pedido como
+> `PENDENTE_PAGAMENTO`."
 
-**Mostrar o segundo terminal** com as retries acontecendo.
+### 4.3 · Ver status PENDENTE_PAGAMENTO (10s)
 
-### 4.3 · Ver status PENDENTE_PAGAMENTO (15s)
+```
+Postman -> Pedido por ID
+```
 
-> "Pedido por ID... `PENDENTE_PAGAMENTO`. **O cliente nao recebeu
-> erro**; o sistema absorveu a falha."
+> "`PENDENTE_PAGAMENTO`. **O cliente nao recebeu erro.** O sistema
+> absorveu a falha — eh o requisito 4.5: 'o pedido nao deve
+> falhar'."
 
-### 4.4 · Religar procpag e ver reprocesso automatico (30s)
+### 4.4 · Religar procpag e ver reprocesso (35s)
 
 ```bash
 docker start procpag
 ```
 
-> "Procpag de volta. Tem um worker `@Scheduled` no `pagamento-service`
-> que roda a cada 30 segundos, busca os pendentes e tenta de novo."
+> "Procpag de volta."
 
-**Aguarde ~30-40s.** Mostre os logs:
-```bash
-docker logs -f pagamento-service
+### 💡 Conceito — o worker de reprocessamento
+
+> "Como o sistema sabe que o gateway voltou? Tem um worker
+> `@Scheduled` no `pagamento-service`, rodando a cada 30
+> segundos, varrendo a tabela de pagamentos pendentes e
+> retentando. Eh dele que vem o requisito 4.6: 'reprocessamento
+> automatico'. Sem ninguem clicar em nada."
+
+**Aguarde ~30s. Mostre os logs:**
+
+> "*Reprocessando pedido pendente... aprovado!*"
+
+```
+Postman -> Pedido por ID
 ```
 
-> "Olha aqui — *'Reprocessando pedido pendente... aprovado!'*. E
-> agora o status..."
+> "`PAGO`. **Recuperou sozinho.**"
 
-**Postman:** `Pedido por ID` → `PAGO`.
+### Bonus: estado do Circuit Breaker
 
-> "**Recuperou sozinho. Sem ninguem clicar em nada.**"
-
-**Bonus:** mostre o estado do Circuit Breaker:
 ```bash
 curl http://localhost:8083/actuator/circuitbreakers
 ```
 
-**CHECKPOINT — bloco 4:**
+> "O Resilience4j expoe o estado pelo Actuator. Da pra monitorar
+> em producao — alarme dispara quando o CB abre."
+
+**✓ Checkpoint — bloco 4:**
 
 | ✓ | ID | Requisito |
 |---|---|---|
-| [ ] | 4.5.a | Pedido nao falha quando gateway esta fora |
-| [ ] | 4.5.b | Marcado como PENDENTE_PAGAMENTO |
-| [ ] | 4.5.c | Vai para fila `pagamento.pendente` |
-| [ ] | 4.6.a | Reprocessamento automatico quando gateway volta |
-| [ ] | 4.6.b | Atualizacao para PAGO apos aprovacao |
-| [ ] | 5.3.c | Tópico `pagamento.pendente` |
-| [ ] | 5.3.f | Fluxo de falha + worker + atualizacao |
-| [ ] | 5.4.a | Circuit Breaker |
-| [ ] | 5.4.b | Retry |
-| [ ] | 5.4.c | Timeout (via HTTP client) |
-| [ ] | 5.4.d–e | Fallback marca PENDENTE + publica `pagamento.pendente` |
+| [ ] | 4.5.a–c | Pedido nao falha + PENDENTE_PAGAMENTO + fila |
+| [ ] | 4.6.a–b | Reprocessamento + atualizacao para PAGO |
+| [ ] | 5.3.c, f | Tópico `pagamento.pendente` + fluxo de falha |
+| [ ] | 5.4.a–e | Circuit Breaker + Retry + Timeout + Fallback |
 | [ ] | 3.f | **Pontos de resiliencia identificados claramente** |
 
 ---
 
-## Bloco 5 · 7:00–8:00 · Testes (Postman Runner + suite unitaria)
+## Bloco 5 · 7:00–8:00 · Testes
 
-### 5.1 · Massa de testes via Postman Collection Runner (30s)
+### 💡 Conceito — piramide de testes
 
-> "Para mostrar que o sistema aguenta volume, tem uma pasta
-> `4. Massa de Testes` na collection. Vou rodar 50 iteracoes no
+> "A piramide de testes diz: muitos unitarios na base (rapidos,
+> isolados), alguns de integracao no meio, poucos end-to-end no
+> topo (lentos, fragils). Nesse projeto, **285 testes
+> unitarios** mais alguns smoke tests de contexto Spring, e a
+> 'massa de testes' no Postman como pseudo-E2E."
+
+### 5.1 · Massa de testes via Postman Runner (30s)
+
+> "Vou rodar 50 iteracoes na pasta `4. Massa de Testes` do
 > Collection Runner."
 
-**Tela:** abrir Collection Runner → pasta `4. Massa de Testes` → Iterations: 50 → Run.
+**Tela:** Collection Runner → pasta `4. Massa de Testes` → 50 iteracoes → Run.
 
-**Enquanto roda:**
-> "Na Kafka UI da pra ver as mensagens chegando em tempo real."
+**Em paralelo, na Kafka UI:**
+
+> "Da pra ver as mensagens chegando em tempo real."
 
 ### 5.2 · Suite unitaria automatizada (30s)
 
-> "Em paralelo, temos **285 testes unitarios** cobrindo os 4
-> modulos. Roda sem Docker, MySQL ou Kafka externos — usa H2 e
-> EmbeddedKafka."
-
-**Mostrar:**
 ```bash
 ./scripts/test-summary.sh
 ```
 
-> "Output: distribuidos como — 63 no auth, 126 no pedido,
-> 57 no pagamento, 39 na cozinha. **Todos verdes.**"
+> "285 testes verdes:
+> - 63 no `usuario-autenticacao`
+> - 126 no `restaurante-pedido`
+> - 57 no `pagamento-service`
+> - 39 no `restaurante-service`
+>
+> **Zero dependencia externa.** O ambiente de teste usa H2
+> em memoria no lugar do MySQL e `@EmbeddedKafka` no lugar do
+> broker real. Roda em qualquer notebook, em 3 minutos."
 
-**CHECKPOINT — bloco 5:**
+**✓ Checkpoint — bloco 5:**
 
 | ✓ | ID | Requisito |
 |---|---|---|
@@ -318,41 +438,62 @@ curl http://localhost:8083/actuator/circuitbreakers
 
 ---
 
-## Bloco 6 · 8:00–9:00 · Tour rapido no codigo
+## Bloco 6 · 8:00–9:00 · Tour no codigo
 
-**Setup:** IDE aberta no projeto.
+**Tela:** IDE aberta no projeto.
 
 ### 6.1 · Hexagonal pura (20s)
 
 **Abrir** `pagamento-service/src/main/java/.../domain/`.
 
-> "Pasta `domain`: zero imports de Spring, JPA ou Kafka. So Java
-> puro."
+> "Pasta `domain`. **Zero imports de Spring, JPA, Kafka.** So
+> Java puro, regras de negocio puras."
 
 **Abrir** `pagamento-service/.../application/port/output/`.
 
-> "Ports — interfaces. Implementadas em `adapter/outbound`."
+> "Aqui estao as **ports** — interfaces que descrevem **o que** o
+> use case precisa, sem dizer **como**. `PaymentGateway`,
+> `PagamentoRepository`. As implementacoes vivem em
+> `adapter/outbound`, dependem dessas interfaces. Isso eh o
+> coracao do **Dependency Inversion Principle** — o D do SOLID."
 
 ### 6.2 · Resilience4j declarativo (20s)
 
 **Abrir** `pagamento-service/.../adapter/outbound/http/ExternalPaymentClient.java`.
 
-> "Olha as anotacoes: `@CircuitBreaker`, `@Retry`. **Toda a logica
-> de resiliencia esta nas anotacoes** — o codigo de negocio fica
-> limpo."
+> "Olhem as anotacoes:
+>
+> ```java
+> @Retry(name = CB_NAME)
+> @CircuitBreaker(name = CB_NAME)
+> public boolean processar(UUID pedidoId, BigDecimal valor) {
+>     // ... codigo de negocio limpo
+> }
+> ```
+>
+> Toda a logica de resiliencia esta nas anotacoes. O metodo
+> recebe a chamada como se fosse normal. Por baixo, AOP do
+> Resilience4j intercepta e aplica as estrategias. **Codigo
+> de negocio fica limpo, regra de resiliencia fica explicita.**"
 
 ### 6.3 · Documentacao versionada (20s)
 
-**Abrir** `docs/` no GitHub:
+**Abrir** a pasta `docs/` no GitHub:
 
-> "Tudo versionado: PDF de documentacao tecnica seguindo ABNT,
-> 13 ADRs em `docs/adr/` documentando cada decisao arquitetural,
-> 4 diagramas Mermaid em `docs/diagramas/` que renderizam aqui no
-> GitHub, e a auditoria de conformidade em
-> `docs/auditoria-conformidade.md` — onde voce pode marcar cada
-> requisito a medida que assistir este video."
+> "Tudo aqui versionado junto com o codigo:
+>
+> - PDF de documentacao tecnica seguindo ABNT (Times 12,
+>   margens 3-2-3-2, etc.)
+> - **13 ADRs** em `docs/adr/` documentando cada decisao
+>   arquitetural — quem ler o sistema daqui a um ano sabe **por
+>   que** as coisas estao do jeito que estao
+> - **6 diagramas Mermaid + PNG** em `docs/diagramas/` —
+>   incluindo dois diagramas C4 oficiais
+> - **Auditoria de conformidade** em
+>   `docs/auditoria-conformidade.md` — onde voces, avaliadores,
+>   podem ir marcando cada requisito enquanto assistem"
 
-**CHECKPOINT — bloco 6:**
+**✓ Checkpoint — bloco 6:**
 
 | ✓ | ID | Requisito |
 |---|---|---|
@@ -362,46 +503,48 @@ curl http://localhost:8083/actuator/circuitbreakers
 
 ---
 
-## Bloco 7 · 9:00–10:00 · Encerramento + recap
+## Bloco 7 · 9:00–10:00 · Encerramento
 
-> "Resumindo o que esta entregue:
+> "Pra fechar: o que esta entregue.
 >
 > - **4 microsservicos** + procpag, todos rodando com **um unico
 >   `docker compose up`**
 > - **6 topicos Kafka** orquestrando o fluxo assincrono
-> - **Resiliencia completa** na integracao com o gateway externo:
->   Circuit Breaker, Retry, Timeout, Fallback, mais o worker de
->   reprocessamento
+> - **Resiliencia completa**: Circuit Breaker, Retry, Timeout,
+>   Fallback, mais o worker de reprocessamento
 > - **Arquitetura hexagonal** consistente nos 4 modulos
-> - **JWT RS256** com perfis de acesso e `clienteId` extraido do token
-> - **Modulo opcional `restaurante-service`** implementado, expandindo
->   o fluxo ate a cozinha
-> - **285 testes unitarios** verdes em todos os modulos
-> - **Performance otimizada**: Kafka KRaft, AppCDS no boot da JVM,
->   layered jars no Dockerfile, resource limits no compose
-> - **Documentacao formal**: PDF ABNT de 17 paginas, 13 ADRs, 4
->   diagramas Mermaid, auditoria de conformidade requisito por
+> - **JWT RS256** com perfis de acesso e `clienteId` extraido
+>   do token
+> - **Modulo opcional `restaurante-service`** implementado,
+>   expandindo o fluxo ate a entrega
+> - **285 testes unitarios** verdes
+> - **Documentacao formal**: PDF ABNT, **2 diagramas C4** (de
+>   Contexto e de Containers), 13 ADRs com Contexto/Decisao/
+>   Consequencias, auditoria de conformidade requisito por
 >   requisito
 >
-> **Decisoes-chave** estao documentadas como ADRs:
+> **Cinco decisoes-chave** estao documentadas como ADRs e merecem
+> destaque:
 >
-> - **GraphQL no lugar de REST** — schema fortemente tipado, cliente
->   pede exatamente os campos que precisa
-> - **gRPC entre servicos** — contrato binario, mais rapido que JSON
-> - **Hexagonal em todos os modulos** — paga o preco de mais classes
->   para ganhar testabilidade total
-> - **Kafka como cola** — desacopla bounded contexts e habilita a
->   resiliencia exigida pelo requisito 4.5/4.6
-> - **`restaurante-service` em bounded context proprio** — cozinha tem
->   modelo diferente (sem preco, com estados de producao)
+> 1. **Microsservicos em vez de monolito** — porque os 4
+>    contextos sao realmente diferentes
+> 2. **Hexagonal em todos os modulos** — paga preco em verbosidade,
+>    ganha em testabilidade e isolamento de framework
+> 3. **Kafka como cola assincrona** — o que torna possivel a
+>    resiliencia exigida pelos requisitos 4.5 e 4.6
+> 4. **Database per service** — cada microsservico com seu MySQL
+>    isolado, sem joins entre bancos
+> 5. **Resilience4j declarativo** — anotacoes em vez de
+>    try/catch/sleep espalhados no codigo
 >
-> Codigo, documentacao e Postman collection no GitHub. **Obrigado!**"
+> Codigo, documentacao e Postman collection estao no GitHub.
+> Obrigado!"
 
-**CHECKPOINT — bloco 7 (recap final):**
+**✓ Checkpoint — bloco 7:**
 
 | ✓ | ID | Requisito |
 |---|---|---|
-| [ ] | 3.h | **Video de no maximo 10 minutos** (✅ se voce esta vendo isto) |
+| [ ] | 3.h | **Video de no maximo 10 minutos** |
 | [ ] | 3.i | Arquitetura escolhida e POR QUE (recap das decisoes) |
 
 ---
@@ -415,54 +558,68 @@ docker compose up -d --build
 # Status
 docker compose ps
 
-# Logs do pagamento (mostrar retries e CB durante demo de resiliencia)
+# Logs do pagamento-service (mostra retries + CB durante demo de resiliencia)
 docker logs -f pagamento-service
 
 # Demo de resiliencia
 docker stop procpag
 docker start procpag
 
-# Inspecionar banco
+# Inspecionar bancos
 docker exec -it mysql mysql -uroot -proot -e \
   "USE pedido_db; SELECT status, COUNT(*) FROM pedidos GROUP BY status;"
 
-# Inspecionar fila da cozinha
 docker exec -it mysql mysql -uroot -proot -e \
   "USE cozinha_db; SELECT status, COUNT(*) FROM pedidos_cozinha GROUP BY status;"
 
 # Suite de testes
 ./scripts/test-summary.sh
 
-# Estado do Circuit Breaker (mostrar OPEN/HALF_OPEN/CLOSED)
+# Resilience4j em runtime
 curl http://localhost:8083/actuator/circuitbreakers
-
-# Worker @Scheduled ativo
 curl http://localhost:8083/actuator/scheduledtasks
 
-# Endpoints
+# Endpoints publicos
 # GraphiQL usuario-autenticacao:  http://localhost:8081/graphiql
 # GraphiQL restaurante-pedido:    http://localhost:8082/graphiql
-# GraphiQL pagamento:             http://localhost:8083/graphiql
+# GraphiQL pagamento-service:     http://localhost:8083/graphiql
 # GraphiQL restaurante-service:   http://localhost:8084/graphiql
+# Swagger restaurante-pedido:     http://localhost:8082/swagger-ui.html
 # Kafka UI:                       http://localhost:8085
-# Actuator health (todos):        http://localhost:808X/actuator/health
 ```
 
 ---
 
-## Apendice B — Recap de cobertura (auditoria por bloco)
+## Apendice B — Glossario express
 
-Os IDs abaixo somam exatamente os 45 itens da
-[auditoria de conformidade](auditoria-conformidade.md). Cada um
-**aparece exatamente uma vez** no checkpoint de algum bloco, exceto
-quando faz parte da introducao geral.
+Termos que aparecem no video, explicados em uma linha:
+
+| Termo | Em uma frase |
+|---|---|
+| **Bounded context** | Fronteira de significado de um modelo de dominio (DDD). |
+| **Hexagonal architecture** | Separar regra de negocio (domain) do mundo externo (adapters) via interfaces (ports). |
+| **Modelo C4** | Documentar arquitetura em ate 4 niveis: Contexto, Containers, Componentes, Code (Simon Brown). |
+| **JWT RS256** | Token assinado com chave RSA assimetrica — chave privada para emitir, publica para verificar. |
+| **Kafka topic** | Caixa postal nomeada onde mensagens sao publicadas e consumidas em ordem por particao. |
+| **Circuit Breaker** | "Disjuntor eletrico" do software — abre o circuito quando detecta falhas repetidas, fail-fast. |
+| **Retry com backoff exponencial** | Tentar de novo, esperando cada vez mais (2s, 4s, 8s...) para nao sobrecarregar o servico em recuperacao. |
+| **Fallback** | Resposta alternativa quando a chamada principal falha (no nosso caso: marcar PENDENTE + publicar evento). |
+| **Idempotencia** | Operacao que pode ser repetida sem efeito colateral (chave para tolerar at-least-once delivery do Kafka). |
+| **At-least-once delivery** | Garantia de que cada mensagem chega ao menos uma vez (pode chegar mais de uma — daí a idempotencia). |
+| **AppCDS** | Application Class Data Sharing — pre-carrega classes da JVM em um archive binario para acelerar boot. |
+| **Worker `@Scheduled`** | Componente Spring que executa um metodo automaticamente em intervalo fixo. |
+| **Spring Actuator** | Endpoints HTTP de gerenciamento (`/actuator/health`, `/actuator/circuitbreakers` etc.). |
+
+---
+
+## Apendice C — Cobertura completa dos 45 itens da auditoria
 
 | Item | Bloco | Onde validar |
 |---|---|---|
 | 3.a | 5 | Volume + 285 testes verdes |
 | 3.b | 5 | Postman collection rodando |
 | 3.c | 2 | `docker compose ps` |
-| 3.d | 2 | Diagrama Mermaid de componentes |
+| 3.d | 2 | C4 + diagrama de componentes |
 | 3.e | 6 | `docs/` no GitHub |
 | 3.f | 4 | Demo de resiliencia |
 | 3.g | 6 | Repositorio aberto na IDE |
@@ -479,7 +636,7 @@ quando faz parte da introducao geral.
 | 4.7.b | 3 | Fluxo da cozinha |
 | 5.1.a-d | 1 | Apresentacao dos 4 servicos |
 | 5.1.e | (skip) | Opcional nao implementado |
-| 5.1.f | 2 | Diagrama |
+| 5.1.f | 2 | Diagramas C4 |
 | 5.2.a | 3 | Login retorna JWT |
 | 5.2.b-d | 3 | Perfis + protecao + clienteId do token |
 | 5.3.a | 3 | Topico `pedido.criado` |
@@ -500,6 +657,6 @@ quando faz parte da introducao geral.
 - [ ] Kafka UI aberto em aba separada
 - [ ] GraphiQL `:8084` aberto em outra aba (token DONO_RESTAURANTE colado em Headers)
 - [ ] Segundo terminal aberto para `docker logs -f pagamento-service`
-- [ ] [auditoria-conformidade.md](auditoria-conformidade.md) aberto em uma aba (consulta rapida se esquecer ID)
+- [ ] [auditoria-conformidade.md](auditoria-conformidade.md) aberta em uma aba (consulta rapida de IDs)
 - [ ] Audio + camera testados (~5 min de gravacao de teste)
 - [ ] Cronometro do celular pronto (manter o ritmo de 1 min/bloco)
