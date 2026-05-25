@@ -284,11 +284,31 @@ Cada execução do Maven Surefire grava um XML por classe de teste em `<modulo>/
 
 ## Arquitetura e fluxo principal
 
-### Diagrama de componentes
+A arquitetura está documentada em **três níveis complementares**, seguindo o **modelo C4** de Simon Brown:
+
+### C4 nível 1 — Contexto
+
+> *Quem usa o sistema e com quem ele conversa.* Visão de alto nível, sem detalhes técnicos.
+
+![C4 Contexto](docs/diagramas/c4-contexto.png)
+
+Fonte: [`docs/diagramas/c4-contexto.md`](docs/diagramas/c4-contexto.md)
+
+### C4 nível 2 — Containers
+
+> *A "caixa" do sistema aberta: aplicações, bancos, brokers — e quais protocolos cada um usa.*
+
+![C4 Containers](docs/diagramas/c4-containers.png)
+
+Fonte: [`docs/diagramas/c4-containers.md`](docs/diagramas/c4-containers.md)
+
+> **"Container" no C4 é diferente de Docker.** No C4, container é qualquer **unidade executável** que armazena dados ou processa código (uma app Spring Boot, um MySQL, um Kafka). Não é container Docker. A coincidência de nome confunde, mas é assim na literatura.
+
+### Diagrama de componentes (visão lógica complementar)
 
 ![Diagrama de componentes](docs/diagramas/componentes.png)
 
-> Fonte: [`docs/diagramas/componentes.md`](docs/diagramas/componentes.md) (Mermaid, renderiza no GitHub). Imagem regerada via `mermaid-cli` em container — instruções em [`docs/diagramas/README.md`](docs/diagramas/README.md).
+> Fonte: [`docs/diagramas/componentes.md`](docs/diagramas/componentes.md) (Mermaid, renderiza no GitHub). Imagens regeradas via `mermaid-cli` em container — instruções em [`docs/diagramas/README.md`](docs/diagramas/README.md).
 
 <details>
 <summary>Versão ASCII (clique para expandir)</summary>
