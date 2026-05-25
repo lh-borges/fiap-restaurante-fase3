@@ -168,4 +168,5 @@ class PagamentoGraphQLApiTest {
         );
         return pagamentoJpaRepository.save(pagamento);
     }
+
 }
