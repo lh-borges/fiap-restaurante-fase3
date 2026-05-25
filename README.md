@@ -11,16 +11,17 @@ Projeto desenvolvido como **Tech Challenge da Fase 3** da PosTech FIAP. A especi
 ## Índice
 
 1. [Como executar](#como-executar)
-2. [Testar com o Postman](#testar-com-o-postman)
-3. [Testes automatizados](#testes-automatizados)
-4. [Arquitetura e fluxo principal](#arquitetura-e-fluxo-principal)
-5. [Decisões arquiteturais — e por que escolhemos cada uma](#decisões-arquiteturais--e-por-que-escolhemos-cada-uma)
-6. [Requisitos da Fase 3 — o que foi feito e como validar](#requisitos-da-fase-3--o-que-foi-feito-e-como-validar)
-7. [O que ainda falta](#o-que-ainda-falta)
-8. [Serviços e portas](#serviços-e-portas)
-9. [Stack](#stack)
-10. [Estrutura do repositório](#estrutura-do-repositório)
-11. [Diagnóstico e inspeção](#diagnóstico-e-inspeção)
+2. [Documentação técnica](#documentação-técnica)
+3. [Testar com o Postman](#testar-com-o-postman)
+4. [Testes automatizados](#testes-automatizados)
+5. [Arquitetura e fluxo principal](#arquitetura-e-fluxo-principal)
+6. [Decisões arquiteturais — e por que escolhemos cada uma](#decisões-arquiteturais--e-por-que-escolhemos-cada-uma)
+7. [Requisitos da Fase 3 — o que foi feito e como validar](#requisitos-da-fase-3--o-que-foi-feito-e-como-validar)
+8. [O que ainda falta](#o-que-ainda-falta)
+9. [Serviços e portas](#serviços-e-portas)
+10. [Stack](#stack)
+11. [Estrutura do repositório](#estrutura-do-repositório)
+12. [Diagnóstico e inspeção](#diagnóstico-e-inspeção)
 
 ---
 
@@ -75,6 +76,26 @@ curl http://localhost:8084/actuator/health   # restaurante-service  -> {"status"
 ```bash
 docker compose down       # mantém o volume do MySQL
 docker compose down -v    # remove também os dados persistidos
+```
+
+---
+
+## Documentação técnica
+
+A documentação formal do projeto vive em [`docs/`](docs/):
+
+| Artefato | O que é | Quando consultar |
+|---|---|---|
+| [`docs/documentacao-arquitetura.pdf`](docs/documentacao-arquitetura.pdf) | **Documento técnico ABNT** (17 páginas, Times 12, espaço 1.5, margens 3-2-3-2 cm) com capa, resumo, sumário, 10 capítulos e referências | Visão completa do sistema para leitura linear (avaliação, onboarding) |
+| [`docs/adr/`](docs/adr/) | **13 ADRs** (Architecture Decision Records, formato Nygard) cobrindo todas as decisões arquiteturais relevantes | Quando precisar entender *por que* algo foi feito de uma forma e não de outra |
+| [`docs/diagramas/`](docs/diagramas/) | **4 diagramas Mermaid** (componentes, sequência happy path, sequência resiliência, máquina de estados do pedido) | Visualização rápida de fluxo e topologia |
+| [`docs/roteiro-video.md`](docs/roteiro-video.md) | Roteiro detalhado do vídeo de apresentação (10 min) com falas, tempos e comandos exatos | Antes de gravar o vídeo de entrega |
+
+O PDF é versionado: novas versões substituem o mesmo arquivo (`docs/documentacao-arquitetura.pdf`). Para regenerar a partir do código-fonte (`docs/build-pdf/gerar_documentacao_pdf.py`):
+
+```bash
+docker run --rm -v "$(pwd)/docs:/work" -w //work/build-pdf \
+  python:3.12-slim sh -c "pip install -q reportlab && python gerar_documentacao_pdf.py"
 ```
 
 ---
@@ -617,6 +638,10 @@ fiap-restaurante-fase3/
 ├── pagamento/                  # microsserviço de pagamento (Kafka + Resilience4j)
 ├── restaurante-service/        # microsserviço de cozinha (fila de produção)
 ├── docs/
+│   ├── documentacao-arquitetura.pdf                       # documentação técnica ABNT (17 pp)
+│   ├── adr/                                               # 13 Architecture Decision Records
+│   ├── diagramas/                                         # diagramas Mermaid (componentes + sequência + estados)
+│   ├── build-pdf/                                         # script Python que regenera o PDF
 │   ├── fiap-fase-3-restaurante.postman_collection.json    # coleção de testes
 │   ├── fiap-fase-3-restaurante.postman_environment.json   # environment (URLs + credenciais)
 │   └── roteiro-video.md                                   # roteiro detalhado do vídeo de entrega
