@@ -576,14 +576,29 @@ def build(filename: str):
         body,
     ))
     story.append(p(
-        "A Figura 1 apresenta a topologia em diagrama de componentes "
-        "(C4 nível 2). A fonte Mermaid está em "
-        "<font face='Courier'>docs/diagramas/componentes.md</font>.",
+        "A arquitetura está documentada em três níveis complementares, "
+        "seguindo o <b>modelo C4</b> de Simon Brown:",
         body,
+    ))
+    story.extend(bullets([
+        "<b>C4 nível 1 — Contexto</b> (Figura 1): o sistema visto de fora; atores e sistemas externos.",
+        "<b>C4 nível 2 — Containers</b> (Figura 2): a topologia técnica interna; aplicações Spring, MySQL, Kafka, com protocolos e tecnologias.",
+        "<b>Diagrama de componentes</b> (Figura 3): visão de componentes lógicos com o detalhamento dos eventos Kafka.",
+    ], bullet))
+    story.append(Spacer(1, 0.3 * cm))
+
+    story.append(figure(
+        "diagramas/c4-contexto.png",
+        "Figura 1 — Diagrama de Contexto (C4 nível 1).",
+        max_width_cm=14,
+    ))
+    story.append(figure(
+        "diagramas/c4-containers.png",
+        "Figura 2 — Diagrama de Containers (C4 nível 2).",
     ))
     story.append(figure(
         "diagramas/componentes.png",
-        "Figura 1 — Diagrama de componentes do sistema.",
+        "Figura 3 — Diagrama de componentes (visão lógica complementar).",
     ))
 
     story.append(p("3.2 Microsserviços", h2))
@@ -731,7 +746,7 @@ def build(filename: str):
     story.append(p("4 FLUXO PRINCIPAL", h1))
     story.append(p(
         "O fluxo feliz (sem falhas) do sistema percorre, em "
-        "ordem, os passos descritos a seguir. A Figura 2 apresenta "
+        "ordem, os passos descritos a seguir. A Figura 4 apresenta "
         "a mesma narrativa em forma gráfica como diagrama de "
         "sequência. A fonte Mermaid está em "
         "<font face='Courier'>docs/diagramas/sequencia-happy-path.md</font>.",
@@ -739,7 +754,7 @@ def build(filename: str):
     ))
     story.append(figure(
         "diagramas/sequencia-happy-path.png",
-        "Figura 2 — Sequência do fluxo feliz (cadastro → entrega pela cozinha).",
+        "Figura 4 — Sequência do fluxo feliz (cadastro → entrega pela cozinha).",
     ))
     story.append(p(
         "<b>1.</b> O cliente envia <font face='Courier'>mutation login</font> "
@@ -819,7 +834,7 @@ def build(filename: str):
         "Todas as transições descritas acima são reguladas pela "
         "máquina de estados implementada no agregado "
         "<font face='Courier'>Pedido</font> do módulo "
-        "<i>restaurante-pedido</i>. A Figura 4 mostra os estados "
+        "<i>restaurante-pedido</i>. A Figura 5 mostra os estados "
         "válidos e as transições permitidas; estados terminais "
         "(<b>PRONTO</b> e <b>CANCELADO</b>) não admitem saída. "
         "Todas as transições disparadas por eventos Kafka são "
@@ -829,7 +844,7 @@ def build(filename: str):
     ))
     story.append(figure(
         "diagramas/maquina-estados-pedido.png",
-        "Figura 4 — Máquina de estados do agregado Pedido.",
+        "Figura 5 — Máquina de estados do agregado Pedido.",
         max_width_cm=13,
     ))
 
@@ -843,13 +858,13 @@ def build(filename: str):
         "previsível. Toda a estratégia foi implementada com "
         "<b>Resilience4j 2.3.0</b> via anotações no método de "
         "integração HTTP, e complementada por um worker agendado "
-        "para reprocessamento automático. A Figura 3 ilustra o "
+        "para reprocessamento automático. A Figura 6 ilustra o "
         "fluxo completo de falha e recuperação.",
         body,
     ))
     story.append(figure(
         "diagramas/sequencia-resiliencia.png",
-        "Figura 3 — Sequência de falha do gateway + reprocessamento automático.",
+        "Figura 6 — Sequência de falha do gateway + reprocessamento automático.",
     ))
 
     story.append(p("5.1 Padrões aplicados", h2))
