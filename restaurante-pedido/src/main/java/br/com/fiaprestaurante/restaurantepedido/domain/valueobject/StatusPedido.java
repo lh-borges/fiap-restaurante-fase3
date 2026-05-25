@@ -28,8 +28,14 @@ public enum StatusPedido {
     /** Gateway de pagamento indisponível; aguarda reprocessamento automático. */
     PENDENTE_PAGAMENTO,
 
-    /** Pagamento aprovado pelo gateway externo; estado terminal de sucesso. */
+    /** Pagamento aprovado pelo gateway externo. */
     PAGO,
+
+    /** Cozinha (restaurante-service) recebeu o pedido e iniciou o preparo. */
+    EM_PREPARO,
+
+    /** Cozinha finalizou o preparo; pedido pronto para entrega/retirada. */
+    PRONTO,
 
     /** Pedido cancelado; estado terminal sem cobrança. */
     CANCELADO

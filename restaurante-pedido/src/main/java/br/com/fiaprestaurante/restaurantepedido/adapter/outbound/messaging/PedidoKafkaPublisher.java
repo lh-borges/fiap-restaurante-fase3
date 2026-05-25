@@ -1,6 +1,7 @@
 package br.com.fiaprestaurante.restaurantepedido.adapter.outbound.messaging;
 
 import br.com.fiaprestaurante.restaurantepedido.application.dto.PedidoCriadoEvent;
+import br.com.fiaprestaurante.restaurantepedido.application.dto.PedidoProntoParaCozinhaEvent;
 import br.com.fiaprestaurante.restaurantepedido.application.port.output.PedidoEventPublisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,15 +29,19 @@ public class PedidoKafkaPublisher implements PedidoEventPublisher {
 
     private final KafkaTemplate<Object, Object> kafkaTemplate;
     private final String topicPedidoCriado;
+    private final String topicProntoParaCozinha;
 
     /**
-     * @param kafkaTemplate      template Kafka injetado pelo {@code KafkaConfig}
-     * @param topicPedidoCriado  nome do tópico (vem de {@code application.properties})
+     * @param kafkaTemplate           template Kafka injetado pelo {@code KafkaConfig}
+     * @param topicPedidoCriado       nome do topico de pedidos criados
+     * @param topicProntoParaCozinha  nome do topico para a cozinha
      */
     public PedidoKafkaPublisher(KafkaTemplate<Object, Object> kafkaTemplate,
-                                @Value("${pedido.topics.pedido-criado}") String topicPedidoCriado) {
+                                @Value("${pedido.topics.pedido-criado}") String topicPedidoCriado,
+                                @Value("${pedido.topics.pedido-pronto-para-cozinha}") String topicProntoParaCozinha) {
         this.kafkaTemplate = kafkaTemplate;
         this.topicPedidoCriado = topicPedidoCriado;
+        this.topicProntoParaCozinha = topicProntoParaCozinha;
     }
 
     /** {@inheritDoc} */
@@ -44,5 +49,12 @@ public class PedidoKafkaPublisher implements PedidoEventPublisher {
     public void publicarPedidoCriado(PedidoCriadoEvent event) {
         log.info("Publicando {} no tópico {}: {}", event.getClass().getSimpleName(), topicPedidoCriado, event);
         kafkaTemplate.send(topicPedidoCriado, event.pedidoId().toString(), event);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void publicarProntoParaCozinha(PedidoProntoParaCozinhaEvent event) {
+        log.info("Publicando {} no topico {}: {}", event.getClass().getSimpleName(), topicProntoParaCozinha, event);
+        kafkaTemplate.send(topicProntoParaCozinha, event.pedidoId().toString(), event);
     }
 }

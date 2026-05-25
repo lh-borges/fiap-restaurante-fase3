@@ -24,7 +24,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Danilo Fernando
  */
 @SpringBootTest
-@EmbeddedKafka(partitions = 1, topics = {"pedido.criado", "pagamento.aprovado", "pagamento.pendente"})
+@EmbeddedKafka(partitions = 1, topics = {
+        "pedido.criado", "pagamento.aprovado", "pagamento.pendente",
+        "pedido.pronto-para-cozinha", "pedido.em-preparo", "pedido.pronto"
+})
 class RestaurantePedidoApplicationContextTest {
 
     @Autowired

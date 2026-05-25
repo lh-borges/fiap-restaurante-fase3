@@ -1,12 +1,21 @@
-# Sobe todo o sistema (3 apps + procpag + MySQL + Kafka KRaft + Kafka UI)
+# Sobe todo o sistema (4 apps + procpag + MySQL + Kafka KRaft + Kafka UI = 8 containers)
 # com um único comando:
 #
 #     docker compose up -d --build
 #
-# Foco em performance:
+# Footprint (limits totais):
+#  - 4 apps Spring  4 x 512M  = 2.0 GB
+#  - MySQL                    = 512 MB
+#  - Kafka                    = 512 MB
+#  - Kafka UI                 = 256 MB
+#  - procpag                  = 256 MB
+#  - TOTAL                    ~ 3.5 GB (era ~5.7 GB antes do tuning de memoria)
+#
+# Foco em performance + footprint enxuto:
 #  - Kafka em modo KRaft (sem Zookeeper): -1 container, startup ~10s mais rapido
-#  - MySQL com innodb_buffer_pool_size e skip-name-resolve afinados
-#  - Resource limits para evitar que 3 JVMs briguem por toda a RAM do host
+#  - MySQL com innodb_buffer_pool_size, skip-name-resolve e performance_schema OFF
+#  - Resource limits agressivos (memoria + CPU) para nao matar o host
+#  - JVM com Xms64M + MaxRAMPercentage=65 + MaxMetaspaceSize=160M
 #  - Healthchecks nos apps Spring com start_period (depends_on cascateia direito)
 #  - tmpfs em /tmp dos apps (Spring escreve muito em /tmp no boot)
 #  - Logging driver com rotacao (json-file ilimitado mata disco no longo prazo)
@@ -20,13 +29,18 @@ x-app-logging: &app-logging
     max-file: "3"
 
 x-app-jvm-opts: &app-jvm-opts
-  # -XX:+UseContainerSupport ja eh default desde Java 10, mas mantemos explicito.
-  # MaxRAMPercentage=70 deixa folga pro overhead do container (metaspace, threads).
-  # G1GC eh default desde Java 9; UseStringDeduplication economiza heap em apps Spring.
-  # ExitOnOutOfMemoryError garante que k8s/compose reinicie em OOM em vez de zumbi.
+  # Footprint minimo para dev/demo. Apps Spring Boot em 512M de container:
+  #  - Xms64M: heap inicial baixo (cresce sob demanda)
+  #  - MaxRAMPercentage=65: heap maximo ~330M (deixa 180M para metaspace + threads + native)
+  #  - MaxMetaspaceSize=160M: limita metaspace (Spring tende a crescer com Hibernate)
+  #  - G1GC: melhor coletor para heap pequeno e steady state
+  #  - UseStringDeduplication: economiza heap em apps com muito DTO/JSON
+  #  - ExitOnOutOfMemoryError: compose reinicia em OOM em vez de zumbi
   JAVA_TOOL_OPTIONS: >-
     -XX:+UseContainerSupport
-    -XX:MaxRAMPercentage=70.0
+    -XX:MaxRAMPercentage=65.0
+    -XX:MaxMetaspaceSize=160M
+    -Xms64M
     -XX:+UseG1GC
     -XX:+UseStringDeduplication
     -XX:+ExitOnOutOfMemoryError
@@ -47,14 +61,17 @@ services:
     command:
       # caching_sha2_password ja eh o default no MySQL 8.4; a flag --default-authentication-plugin
       # foi removida nessa versao. innodb-redo-log-capacity substitui innodb-log-file-size.
+      # Tuning enxuto para dev: buffer pool 192M (suficiente para 4 schemas pequenos),
+      # max-connections 60 (4 apps x 10 Hikari + overhead).
       - "--skip-name-resolve"                       # elimina reverse-DNS por conexao
-      - "--innodb-buffer-pool-size=512M"            # cache de paginas (default eh 128M)
-      - "--innodb-redo-log-capacity=128M"
+      - "--innodb-buffer-pool-size=192M"            # era 512M
+      - "--innodb-redo-log-capacity=64M"            # era 128M
       - "--innodb-flush-log-at-trx-commit=2"        # mais rapido (perde <=1s em crash do host)
       - "--innodb-flush-method=O_DIRECT"            # evita double-buffering com page cache
-      - "--max-connections=200"
+      - "--max-connections=60"                      # era 200
       - "--character-set-server=utf8mb4"
       - "--collation-server=utf8mb4_unicode_ci"
+      - "--performance-schema=OFF"                  # desliga schema de telemetria (~80M)
     ports:
       - "3307:3306"
     volumes:
@@ -70,9 +87,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
+          memory: 512M           # era 1G
+          cpus: "1.0"
         reservations:
-          memory: 384M
+          memory: 128M           # era 384M
     networks:
       - fase3net
 
@@ -104,7 +122,7 @@ services:
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       KAFKA_NUM_PARTITIONS: 3
       # --- JVM do broker ---
-      KAFKA_HEAP_OPTS: "-Xms512M -Xmx512M"
+      KAFKA_HEAP_OPTS: "-Xms256M -Xmx256M"   # era 512M; suficiente para single-node dev
     volumes:
       - kafka_data:/var/lib/kafka/data
     healthcheck:
@@ -117,9 +135,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
+          memory: 512M           # era 1G
+          cpus: "1.0"
         reservations:
-          memory: 512M
+          memory: 192M           # era 512M
     networks:
       - fase3net
 
@@ -136,12 +155,13 @@ services:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
       # Reduz consumo do proprio UI
-      JAVA_OPTS: "-Xmx256M"
+      JAVA_OPTS: "-Xmx128M"      # era 256M
     logging: *app-logging
     deploy:
       resources:
         limits:
-          memory: 384M
+          memory: 256M           # era 384M
+          cpus: "0.5"
     networks:
       - fase3net
 
@@ -157,6 +177,7 @@ services:
       resources:
         limits:
           memory: 256M
+          cpus: "0.5"
     networks:
       - fase3net
 
@@ -195,9 +216,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 768M
+          memory: 512M           # era 768M (cabe JVM com Xmx ~330M + metaspace 160M + threads)
+          cpus: "0.75"
         reservations:
-          memory: 384M
+          memory: 128M           # era 384M
     networks:
       - fase3net
 
@@ -241,9 +263,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 768M
+          memory: 512M           # era 768M (cabe JVM com Xmx ~330M + metaspace 160M + threads)
+          cpus: "0.75"
         reservations:
-          memory: 384M
+          memory: 128M           # era 384M
     networks:
       - fase3net
 
@@ -286,9 +309,57 @@ services:
     deploy:
       resources:
         limits:
-          memory: 768M
+          memory: 512M           # era 768M (cabe JVM com Xmx ~330M + metaspace 160M + threads)
+          cpus: "0.75"
         reservations:
-          memory: 384M
+          memory: 128M           # era 384M
+    networks:
+      - fase3net
+
+  restaurante-service:
+    build:
+      context: .
+      dockerfile: restaurante-service/Dockerfile
+    image: fiap-fase3/restaurante-service:local
+    container_name: restaurante-service
+    restart: unless-stopped
+    init: true
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      usuario-autenticacao:
+        condition: service_healthy
+    ports:
+      - "8084:8084"
+    environment:
+      <<: *app-jvm-opts
+      SERVER_PORT: 8084
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/cozinha_db?useSSL=false&allowPublicKeyRetrieval=true&cachePrepStmts=true&useServerPrepStmts=true&rewriteBatchedStatements=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 10
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 2
+      SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.MySQLDialect
+      SPRING_JPA_OPEN_IN_VIEW: "false"
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    tmpfs:
+      - /tmp:size=128M
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8084/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    logging: *app-logging
+    deploy:
+      resources:
+        limits:
+          memory: 512M           # era 768M (cabe JVM com Xmx ~330M + metaspace 160M + threads)
+          cpus: "0.75"
+        reservations:
+          memory: 128M           # era 384M
     networks:
       - fase3net
 

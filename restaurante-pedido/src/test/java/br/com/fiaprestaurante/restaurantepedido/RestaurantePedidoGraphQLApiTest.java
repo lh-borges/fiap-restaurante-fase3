@@ -33,11 +33,17 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
         "spring.kafka.consumer.group-id=restaurante-pedido-test",
         "pedido.topics.pedido-criado=pedido.criado",
         "pedido.topics.pagamento-aprovado=pagamento.aprovado",
-        "pedido.topics.pagamento-pendente=pagamento.pendente"
+        "pedido.topics.pagamento-pendente=pagamento.pendente",
+        "pedido.topics.pedido-pronto-para-cozinha=pedido.pronto-para-cozinha",
+        "pedido.topics.pedido-em-preparo=pedido.em-preparo",
+        "pedido.topics.pedido-pronto=pedido.pronto"
 })
 @EmbeddedKafka(
         partitions = 1,
-        topics = {"pedido.criado", "pagamento.aprovado", "pagamento.pendente"},
+        topics = {
+                "pedido.criado", "pagamento.aprovado", "pagamento.pendente",
+                "pedido.pronto-para-cozinha", "pedido.em-preparo", "pedido.pronto"
+        },
         bootstrapServersProperty = "spring.kafka.bootstrap-servers"
 )
 class RestaurantePedidoGraphQLApiTest {

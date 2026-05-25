@@ -168,6 +168,46 @@ public class Pedido {
     }
 
     /**
+     * Marca o pedido como {@link StatusPedido#EM_PREPARO}. Disparado pelo
+     * evento {@code pedido.em-preparo} publicado pelo restaurante-service
+     * quando a cozinha inicia o preparo.
+     *
+     * <p>Idempotente: chamadas repetidas nao causam efeito.
+     *
+     * @throws BusinessException se o pedido nao estiver em estado compativel
+     */
+    public void marcarComoEmPreparo() {
+        if (this.status == StatusPedido.EM_PREPARO) {
+            return;
+        }
+        if (this.status != StatusPedido.PAGO) {
+            throw new BusinessException("pedido nao pode ir para EM_PREPARO no status " + this.status);
+        }
+        this.status = StatusPedido.EM_PREPARO;
+        this.updatedAt = Instant.now();
+    }
+
+    /**
+     * Marca o pedido como {@link StatusPedido#PRONTO}. Disparado pelo
+     * evento {@code pedido.pronto} publicado pelo restaurante-service
+     * quando a cozinha finaliza o preparo.
+     *
+     * <p>Idempotente: chamadas repetidas nao causam efeito.
+     *
+     * @throws BusinessException se o pedido nao estiver em estado compativel
+     */
+    public void marcarComoPronto() {
+        if (this.status == StatusPedido.PRONTO) {
+            return;
+        }
+        if (this.status != StatusPedido.EM_PREPARO && this.status != StatusPedido.PAGO) {
+            throw new BusinessException("pedido nao pode ir para PRONTO no status " + this.status);
+        }
+        this.status = StatusPedido.PRONTO;
+        this.updatedAt = Instant.now();
+    }
+
+    /**
      * Cancela o pedido. Não permitido se já estiver pago.
      *
      * @throws BusinessException se o pedido já estiver no status {@link StatusPedido#PAGO}

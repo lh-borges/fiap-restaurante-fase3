@@ -1,0 +1,37 @@
+"""
+Schema GraphQL — modulo restaurante-service (cozinha/producao)
+"""
+
+type ItemCozinha {
+    produtoId: ID!
+    nome: String!
+    quantidade: Int!
+}
+
+type PedidoCozinha {
+    id: ID!
+    pedidoId: ID!
+    restauranteId: ID!
+    itens: [ItemCozinha!]!
+    status: String!
+    createdAt: String!
+    updatedAt: String!
+    iniciadoEm: String
+    finalizadoEm: String
+}
+
+type Query {
+    "Lista os pedidos da fila da cozinha por status (ou todos se status for null). Requer perfil DONO_RESTAURANTE."
+    filaCozinha(status: String): [PedidoCozinha!]!
+
+    "Consulta um pedido da cozinha por ID. Requer perfil DONO_RESTAURANTE."
+    pedidoCozinhaPorId(pedidoCozinhaId: ID!): PedidoCozinha
+}
+
+type Mutation {
+    "Marca um pedido como EM_PREPARO e publica o evento pedido.em-preparo. Requer perfil DONO_RESTAURANTE."
+    iniciarPreparo(pedidoCozinhaId: ID!): PedidoCozinha!
+
+    "Marca um pedido como PRONTO e publica o evento pedido.pronto. Requer perfil DONO_RESTAURANTE."
+    marcarComoPronto(pedidoCozinhaId: ID!): PedidoCozinha!
+}
