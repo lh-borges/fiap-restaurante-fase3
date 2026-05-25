@@ -111,7 +111,7 @@ Na pasta [`docs/`](docs/):
 2. `2. Pedidos` → **Criar Pedido** — devolve o `id` e o `valorTotal` calculado; o `pedidoId` é salvo automaticamente.
 3. `2. Pedidos` → **Confirmar Pedido** — publica o evento `pedido.criado` no Kafka.
 4. Aguarde alguns segundos e rode `2. Pedidos` → **Pedido por ID** — o status evolui para `PAGO` (ou `PENDENTE_PAGAMENTO` se o gateway falhar).
-5. `3. Pagamento` → **Pagamento por Pedido** — confirma o pagamento `APROVADO`.
+5. `3. Pagamento` → **Pagamento por Pedido** — confirma o pagamento `APROVADO`. Como o processamento é assíncrono, uma consulta feita antes de o evento ser consumido retorna `404 NOT_FOUND`; aguarde alguns segundos e consulte novamente.
 
 ### Fluxo da cozinha (via GraphiQL)
 
@@ -143,6 +143,29 @@ docker start procpag     # depois de rodar a massa
 Os pedidos criados com o gateway fora ficam `PENDENTE_PAGAMENTO` e são reprocessados automaticamente pelo worker quando ele volta. Confira o resultado em `2. Pedidos` → **Meus Pedidos**.
 
 ---
+
+## Swagger e contrato HTTP do GraphQL
+
+Cada microsserviço publica a operação HTTP `POST /graphql` no Swagger UI, com exemplos de requisição e das respostas esperadas:
+
+| Serviço | Swagger UI | Documento OpenAPI |
+|---|---|---|
+| `usuario-autenticacao` | `http://localhost:8081/swagger-ui/index.html` | `http://localhost:8081/v3/api-docs` |
+| `restaurante-pedido` | `http://localhost:8082/swagger-ui/index.html` | `http://localhost:8082/v3/api-docs` |
+| `pagamento` | `http://localhost:8083/swagger-ui/index.html` | `http://localhost:8083/v3/api-docs` |
+
+Embora APIs GraphQL frequentemente respondam erros de execução com HTTP `200`, esta aplicação configura o endpoint para refletir a classificação do erro também no **status HTTP**:
+
+| Status HTTP | Classificação GraphQL | Exemplo de cenário |
+|---|---|---|
+| `200 OK` | — | Operação executada com sucesso. |
+| `400 BAD_REQUEST` | `BAD_REQUEST` | UUID inválido ou entrada incompatível com o contrato. |
+| `401 UNAUTHORIZED` | — | Token Bearer inválido ou expirado, rejeitado pelo Spring Security antes da execução GraphQL. |
+| `403 FORBIDDEN` | `FORBIDDEN` | Requisição sem autenticação ou usuário sem perfil para a operação. |
+| `404 NOT_FOUND` | `NOT_FOUND` | Consulta a usuário, pedido ou pagamento inexistente. |
+| `500 INTERNAL_SERVER_ERROR` | `INTERNAL_ERROR` | Falha inesperada do serviço. |
+
+Na query `pagamentoPorPedido`, um `pedidoId` em formato UUID válido sem pagamento registrado agora responde `404 NOT_FOUND` e inclui o erro GraphQL no corpo. Isso diferencia recurso ainda inexistente de um pagamento retornado com sucesso.
 
 ## Testes automatizados
 
@@ -492,7 +515,7 @@ Cada decisão técnica deste projeto carrega um trade-off. Esta seção document
 |---|---|---|
 | ✅ **4.1** Criar e autenticar cliente | `usuario-autenticacao` — mutations GraphQL `cadastrarUsuario` e `login` (JWT RS256) | Postman › `1. Autenticacao` › *Cadastrar Usuario* e *Login como Usuario* |
 | ✅ **4.2** Criar pedido (cliente do token, restaurante, itens, total, confirmação) | `restaurante-pedido` — mutations `criarPedido` (calcula `valorTotal`) e `confirmarPedido` | Postman › `2. Pedidos` › *Criar Pedido* (veja o `valorTotal`) e *Confirmar Pedido* |
-| ✅ **4.3** Consultar pedido por ID e listar pedidos do cliente | `restaurante-pedido` — queries `pedidoPorId` (com **verificação de ownership** — só retorna se o pedido pertencer ao cliente do JWT) e `meusPedidos` | Postman › `2. Pedidos` › *Pedido por ID* e *Meus Pedidos*. Tentar consultar pedido alheio retorna `null` |
+| ✅ **4.3** Consultar pedido por ID e listar pedidos do cliente | `restaurante-pedido` — queries `pedidoPorId` (com **verificação de ownership** — só retorna se o pedido pertencer ao cliente do JWT) e `meusPedidos` | Postman › `2. Pedidos` › *Pedido por ID* e *Meus Pedidos*. Tentar consultar pedido alheio retorna `404 NOT_FOUND` |
 | ✅ **4.4** Processar pagamento via gateway externo | `pagamento` — `ExternalPaymentClient` chama `procpag:8089/requisicao` ao consumir `pedido.criado` | Crie e confirme um pedido; depois Postman › `3. Pagamento` › *Pagamento por Pedido* → `APROVADO`. Logs: `docker logs pagamento` |
 | ✅ **4.5** Pagamento pendente quando o gateway está indisponível | Fallback do Resilience4j marca `PENDENTE` e publica `pagamento.pendente`; o pedido não falha | `docker stop procpag`, crie+confirme um pedido; consulte *Pedido por ID* → `PENDENTE_PAGAMENTO` |
 | ✅ **4.6** Reprocessamento automático | `pagamento` — `ReprocessamentoPagamentoWorker` (`@Scheduled` 30s) reprocessa pendentes | Após o teste 4.5, `docker start procpag`; aguarde ~30s e consulte *Pedido por ID* → `PAGO` |
@@ -566,6 +589,7 @@ Todos os containers vivem na rede `fase3net` e se enxergam pelo nome do serviço
 | Java | 25 (Temurin LTS) |
 | Spring Boot | 4.0.5 |
 | Spring GraphQL | 4.0.x |
+| Springdoc OpenAPI / Swagger UI | 3.0.3 |
 | Spring Security (OAuth2 Resource Server) | 7.x |
 | Apache Kafka (Confluent, **KRaft mode**) | 7.7.1 |
 | Spring Kafka | 4.0.4 |

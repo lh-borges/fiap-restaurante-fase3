@@ -10,6 +10,7 @@ import br.com.fiaprestaurante.restaurantepedido.application.port.input.Confirmar
 import br.com.fiaprestaurante.restaurantepedido.application.port.input.ConsultarModuloRestaurantePedidoUseCase;
 import br.com.fiaprestaurante.restaurantepedido.application.port.input.ConsultarPedidoUseCase;
 import br.com.fiaprestaurante.restaurantepedido.application.port.input.CriarPedidoUseCase;
+import br.com.fiaprestaurante.restaurantepedido.domain.exception.PedidoNaoEncontradoException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -121,22 +123,22 @@ class RestaurantePedidoGraphQLControllerTest {
     }
 
     @Test
-    void pedidoPorIdDeveRetornarNullQuandoNaoExistir() {
+    void pedidoPorIdDeveLancarNotFoundQuandoNaoExistir() {
         when(consultarPedido.porId(PEDIDO_ID, CLIENTE_ID)).thenReturn(Optional.empty());
 
-        PedidoResponse resposta = controller.pedidoPorId(PEDIDO_ID.toString());
-
-        assertThat(resposta).isNull();
+        assertThatThrownBy(() -> controller.pedidoPorId(PEDIDO_ID.toString()))
+                .isInstanceOf(PedidoNaoEncontradoException.class)
+                .hasMessage("Pedido não encontrado para o identificador informado.");
     }
 
     @Test
-    void pedidoPorIdDeveRetornarNullQuandoForDeOutroCliente() {
-        // service ja filtra por ownership (retorna empty) — controller so propaga
+    void pedidoPorIdDeveLancarNotFoundQuandoForDeOutroCliente() {
+        // service ja filtra por ownership (retorna empty) e o controller nao vaza a existencia do pedido
         when(consultarPedido.porId(PEDIDO_ID, CLIENTE_ID)).thenReturn(Optional.empty());
 
-        PedidoResponse resposta = controller.pedidoPorId(PEDIDO_ID.toString());
-
-        assertThat(resposta).isNull();
+        assertThatThrownBy(() -> controller.pedidoPorId(PEDIDO_ID.toString()))
+                .isInstanceOf(PedidoNaoEncontradoException.class)
+                .hasMessage("Pedido não encontrado para o identificador informado.");
         verify(consultarPedido).porId(PEDIDO_ID, CLIENTE_ID);
     }
 
