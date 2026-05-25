@@ -10,9 +10,9 @@ sequenceDiagram
     actor Cliente
     participant Pedido as restaurante-pedido
     participant Kafka as Kafka
-    participant Pagamento as pagamento
+    participant Pagamento as pagamento-service
     participant Procpag as procpag (DOWN)
-    participant Worker as pagamento.@Scheduled
+    participant Worker as pagamento-service.@Scheduled
 
     Note over Procpag: docker stop procpag
 
