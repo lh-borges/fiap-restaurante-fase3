@@ -10,9 +10,9 @@
         <version>1.0.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>pagamento</artifactId>
-    <name>pagamento</name>
-    <description>Serviço de pagamentos — GraphQL + Kafka + Resilience4j + JPA/MySQL</description>
+    <artifactId>pagamento-service</artifactId>
+    <name>pagamento-service</name>
+    <description>pagamento-service — serviço de pagamentos: GraphQL + Kafka + Resilience4j + JPA/MySQL (nome conforme req. 5.1 da spec)</description>
 
     <properties>
         <resilience4j.version>2.3.0</resilience4j.version>
