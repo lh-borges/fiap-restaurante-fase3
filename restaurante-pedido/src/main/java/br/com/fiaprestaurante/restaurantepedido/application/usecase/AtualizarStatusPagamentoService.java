@@ -1,7 +1,10 @@
 package br.com.fiaprestaurante.restaurantepedido.application.usecase;
 
+import br.com.fiaprestaurante.restaurantepedido.application.dto.PedidoProntoParaCozinhaEvent;
 import br.com.fiaprestaurante.restaurantepedido.application.port.input.AtualizarStatusPagamentoUseCase;
+import br.com.fiaprestaurante.restaurantepedido.application.port.output.PedidoEventPublisher;
 import br.com.fiaprestaurante.restaurantepedido.application.port.output.PedidoRepository;
+import br.com.fiaprestaurante.restaurantepedido.domain.entity.ItemPedido;
 import br.com.fiaprestaurante.restaurantepedido.domain.entity.Pedido;
 import br.com.fiaprestaurante.restaurantepedido.domain.exception.PedidoNaoEncontradoException;
 import org.slf4j.Logger;
@@ -9,6 +12,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -28,12 +33,16 @@ public class AtualizarStatusPagamentoService implements AtualizarStatusPagamento
     private static final Logger log = LoggerFactory.getLogger(AtualizarStatusPagamentoService.class);
 
     private final PedidoRepository pedidoRepository;
+    private final PedidoEventPublisher eventPublisher;
 
     /**
      * @param pedidoRepository porta de persistência
+     * @param eventPublisher   porta de publicacao de eventos (Kafka)
      */
-    public AtualizarStatusPagamentoService(PedidoRepository pedidoRepository) {
+    public AtualizarStatusPagamentoService(PedidoRepository pedidoRepository,
+                                           PedidoEventPublisher eventPublisher) {
         this.pedidoRepository = pedidoRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     /** {@inheritDoc} */
@@ -45,6 +54,27 @@ public class AtualizarStatusPagamentoService implements AtualizarStatusPagamento
         pedido.marcarComoPago(pagamentoId);
         pedidoRepository.salvar(pedido);
         log.info("Pedido marcado como PAGO: pedidoId={} pagamentoId={}", pedidoId, pagamentoId);
+        publicarParaCozinha(pedido);
+    }
+
+    /**
+     * Notifica o {@code restaurante-service} (cozinha) que o pedido esta pronto
+     * para iniciar o preparo. Disparado apos o status virar PAGO.
+     */
+    private void publicarParaCozinha(Pedido pedido) {
+        List<PedidoProntoParaCozinhaEvent.Item> itens = pedido.getItens().stream()
+                .map(this::toEventItem)
+                .toList();
+        eventPublisher.publicarProntoParaCozinha(new PedidoProntoParaCozinhaEvent(
+                pedido.getId(),
+                pedido.getRestauranteId(),
+                itens,
+                Instant.now()
+        ));
+    }
+
+    private PedidoProntoParaCozinhaEvent.Item toEventItem(ItemPedido item) {
+        return new PedidoProntoParaCozinhaEvent.Item(item.getProdutoId(), item.getNome(), item.getQuantidade());
     }
 
     /** {@inheritDoc} */
