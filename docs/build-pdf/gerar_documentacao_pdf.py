@@ -26,6 +26,8 @@ from reportlab.lib.units import cm
 from reportlab.platypus import (
     BaseDocTemplate,
     Frame,
+    Image,
+    KeepTogether,
     PageBreak,
     PageTemplate,
     Paragraph,
@@ -262,6 +264,33 @@ def p(text, style):
 
 def bullets(items, style):
     return [Paragraph(f"• {item}", style) for item in items]
+
+
+def figure(filename: str, caption: str, max_width_cm: float = 15.5):
+    """Insere uma imagem com largura limitada e legenda no estilo ABNT.
+
+    O caminho eh relativo a pasta docs/ — assumimos que o script roda em
+    docs/build-pdf/, entao subimos um nivel para acessar diagramas/.
+    """
+    img_path = Path(__file__).resolve().parents[1] / filename
+    img = Image(str(img_path))
+    # Escala proporcional ao max_width
+    aspect = img.imageHeight / img.imageWidth
+    img.drawWidth = max_width_cm * cm
+    img.drawHeight = img.drawWidth * aspect
+    caption_style = ParagraphStyle(
+        "FigureCaption",
+        fontName=FONT_BODY_ITALIC,
+        fontSize=10,
+        leading=12,
+        alignment=TA_CENTER,
+        spaceBefore=4,
+        spaceAfter=12,
+    )
+    return KeepTogether([
+        img,
+        Paragraph(caption, caption_style),
+    ])
 
 
 def table_simple(data, col_widths=None):
@@ -547,47 +576,15 @@ def build(filename: str):
         body,
     ))
     story.append(p(
-        "A figura abaixo, em representação textual, descreve a "
-        "topologia. O diagrama em formato Mermaid está disponível "
-        "em <font face='Courier'>docs/diagramas/componentes.md</font>.",
+        "A Figura 1 apresenta a topologia em diagrama de componentes "
+        "(C4 nível 2). A fonte Mermaid está em "
+        "<font face='Courier'>docs/diagramas/componentes.md</font>.",
         body,
     ))
-    diagrama_componentes = """
-   Cliente (Postman / GraphiQL)
-       |
-       | 1. cadastro + login (GraphQL)        +-----------------------+
-       +-----------------------------------> | usuario-autenticacao  | :8081
-       |  <----------- JWT (RS256) ---------- |                       |
-       |                                     +-----------------------+
-       |                                                 ^ gRPC (validacao)
-       v                                                 |
-   +----------------------+   publica pedido.criado +-----------+
-   |  restaurante-pedido  | ---------------------> |           |
-   |        :8082         |                        |   Kafka   |
-   |                      | <-- pagamento.* ------ |  (KRaft)  |
-   |  consome 4 topicos   | <-- pedido.em-preparo  |           |
-   |  publica 2 topicos   | <-- pedido.pronto      +-----------+
-   +----------------------+                          |     ^
-                                              consome|     |publica
-                                          pedido.criado    |pagamento.*
-                                                  v        |
-                                            +-----------------+
-                                            | pagamento-service| :8083
-                                            |                 |
-                                            +-----------------+
-                                                  |
-                                       HTTP + Resilience4j
-                                                  v
-                                            +-------------+
-                                            |   procpag   | :8089
-                                            +-------------+
-
-                          +----------------------+
-                          |  restaurante-service | :8084
-                          |  (cozinha)           |
-                          +----------------------+
-"""
-    story.append(p(diagrama_componentes.replace("\n", "<br/>").replace(" ", "&nbsp;"), code))
+    story.append(figure(
+        "diagramas/componentes.png",
+        "Figura 1 — Diagrama de componentes do sistema.",
+    ))
 
     story.append(p("3.2 Microsserviços", h2))
     story.append(p(
@@ -734,10 +731,15 @@ def build(filename: str):
     story.append(p("4 FLUXO PRINCIPAL", h1))
     story.append(p(
         "O fluxo feliz (sem falhas) do sistema percorre, em "
-        "ordem, os passos descritos a seguir. O diagrama de "
-        "sequência em <font face='Courier'>docs/diagramas/sequencia-happy-path.md</font> "
-        "apresenta a mesma narrativa em forma gráfica.",
+        "ordem, os passos descritos a seguir. A Figura 2 apresenta "
+        "a mesma narrativa em forma gráfica como diagrama de "
+        "sequência. A fonte Mermaid está em "
+        "<font face='Courier'>docs/diagramas/sequencia-happy-path.md</font>.",
         body,
+    ))
+    story.append(figure(
+        "diagramas/sequencia-happy-path.png",
+        "Figura 2 — Sequência do fluxo feliz (cadastro → entrega pela cozinha).",
     ))
     story.append(p(
         "<b>1.</b> O cliente envia <font face='Courier'>mutation login</font> "
@@ -812,6 +814,25 @@ def build(filename: str):
         body,
     ))
 
+    story.append(p("4.1 Máquina de estados do agregado Pedido", h2))
+    story.append(p(
+        "Todas as transições descritas acima são reguladas pela "
+        "máquina de estados implementada no agregado "
+        "<font face='Courier'>Pedido</font> do módulo "
+        "<i>restaurante-pedido</i>. A Figura 4 mostra os estados "
+        "válidos e as transições permitidas; estados terminais "
+        "(<b>PRONTO</b> e <b>CANCELADO</b>) não admitem saída. "
+        "Todas as transições disparadas por eventos Kafka são "
+        "<b>idempotentes</b> — receber o mesmo evento duas vezes "
+        "não causa efeito colateral.",
+        body,
+    ))
+    story.append(figure(
+        "diagramas/maquina-estados-pedido.png",
+        "Figura 4 — Máquina de estados do agregado Pedido.",
+        max_width_cm=13,
+    ))
+
     # ------------------------------------------------------------- #
     # 5. RESILIENCIA
     # ------------------------------------------------------------- #
@@ -822,8 +843,13 @@ def build(filename: str):
         "previsível. Toda a estratégia foi implementada com "
         "<b>Resilience4j 2.3.0</b> via anotações no método de "
         "integração HTTP, e complementada por um worker agendado "
-        "para reprocessamento automático.",
+        "para reprocessamento automático. A Figura 3 ilustra o "
+        "fluxo completo de falha e recuperação.",
         body,
+    ))
+    story.append(figure(
+        "diagramas/sequencia-resiliencia.png",
+        "Figura 3 — Sequência de falha do gateway + reprocessamento automático.",
     ))
 
     story.append(p("5.1 Padrões aplicados", h2))

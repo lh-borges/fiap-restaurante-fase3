@@ -286,6 +286,13 @@ Cada execução do Maven Surefire grava um XML por classe de teste em `<modulo>/
 
 ### Diagrama de componentes
 
+![Diagrama de componentes](docs/diagramas/componentes.png)
+
+> Fonte: [`docs/diagramas/componentes.md`](docs/diagramas/componentes.md) (Mermaid, renderiza no GitHub). Imagem regerada via `mermaid-cli` em container — instruções em [`docs/diagramas/README.md`](docs/diagramas/README.md).
+
+<details>
+<summary>Versão ASCII (clique para expandir)</summary>
+
 ```
    Cliente (Postman / GraphiQL)
         |
@@ -339,16 +346,33 @@ Cada execução do Maven Surefire grava um XML por classe de teste em `<modulo>/
                                               +----------------------+
 ```
 
+</details>
+
 **6 tópicos Kafka** orquestram o fluxo:
 
 | Tópico | Publicador | Consumidor(es) |
 |---|---|---|
-| `pedido.criado` | restaurante-pedido | pagamento |
-| `pagamento.aprovado` | pagamento | restaurante-pedido |
-| `pagamento.pendente` | pagamento | restaurante-pedido |
+| `pedido.criado` | restaurante-pedido | pagamento-service |
+| `pagamento.aprovado` | pagamento-service | restaurante-pedido |
+| `pagamento.pendente` | pagamento-service | restaurante-pedido |
 | `pedido.pronto-para-cozinha` | restaurante-pedido | restaurante-service |
 | `pedido.em-preparo` | restaurante-service | restaurante-pedido |
 | `pedido.pronto` | restaurante-service | restaurante-pedido |
+
+### Diagramas de sequência
+
+Os fluxos completos estão documentados como diagramas de sequência (Mermaid + PNG):
+
+| Cenário | Imagem | Fonte |
+|---|---|---|
+| **Happy path** (cadastro → pago → entregue pela cozinha) | [![sequencia happy path](docs/diagramas/sequencia-happy-path.png)](docs/diagramas/sequencia-happy-path.png) | [`docs/diagramas/sequencia-happy-path.md`](docs/diagramas/sequencia-happy-path.md) |
+| **Resiliência** (gateway externo offline → fallback → reprocesso) | [![sequencia resiliencia](docs/diagramas/sequencia-resiliencia.png)](docs/diagramas/sequencia-resiliencia.png) | [`docs/diagramas/sequencia-resiliencia.md`](docs/diagramas/sequencia-resiliencia.md) |
+
+### Máquina de estados do agregado `Pedido`
+
+![Estados do pedido](docs/diagramas/maquina-estados-pedido.png)
+
+> Estados terminais: `PRONTO` e `CANCELADO`. Todas as transições disparadas por eventos Kafka são **idempotentes** — receber o mesmo evento duas vezes não causa efeito. Fonte: [`docs/diagramas/maquina-estados-pedido.md`](docs/diagramas/maquina-estados-pedido.md).
 
 ### Fluxo principal
 
@@ -640,7 +664,7 @@ fiap-restaurante-fase3/
 ├── docs/
 │   ├── documentacao-arquitetura.pdf                       # documentação técnica ABNT (17 pp)
 │   ├── adr/                                               # 13 Architecture Decision Records
-│   ├── diagramas/                                         # diagramas Mermaid (componentes + sequência + estados)
+│   ├── diagramas/                                         # 4 diagramas: fonte Mermaid (.md) + renderização (.png)
 │   ├── build-pdf/                                         # script Python que regenera o PDF
 │   ├── fiap-fase-3-restaurante.postman_collection.json    # coleção de testes
 │   ├── fiap-fase-3-restaurante.postman_environment.json   # environment (URLs + credenciais)
