@@ -21,6 +21,7 @@ import static org.mockito.Mockito.verify;
 class PedidoKafkaPublisherTest {
 
     private static final String TOPICO = "pedido.criado";
+    private static final String TOPICO_COZINHA = "pedido.pronto-para-cozinha";
     private static final UUID PEDIDO_ID = UUID.fromString("11111111-1111-4111-8111-111111111111");
     private static final UUID CLIENTE_ID = UUID.fromString("22222222-2222-4222-8222-222222222222");
 
@@ -31,7 +32,7 @@ class PedidoKafkaPublisherTest {
     @SuppressWarnings("unchecked")
     void setUp() {
         kafkaTemplate = mock(KafkaTemplate.class);
-        publisher = new PedidoKafkaPublisher(kafkaTemplate, TOPICO);
+        publisher = new PedidoKafkaPublisher(kafkaTemplate, TOPICO, TOPICO_COZINHA);
     }
 
     @Test
@@ -42,5 +43,20 @@ class PedidoKafkaPublisherTest {
         publisher.publicarPedidoCriado(event);
 
         verify(kafkaTemplate).send(TOPICO, PEDIDO_ID.toString(), event);
+    }
+
+    @Test
+    void deveEnviarEventoProntoParaCozinhaComChavePedidoId() {
+        br.com.fiaprestaurante.restaurantepedido.application.dto.PedidoProntoParaCozinhaEvent event =
+                new br.com.fiaprestaurante.restaurantepedido.application.dto.PedidoProntoParaCozinhaEvent(
+                        PEDIDO_ID,
+                        UUID.randomUUID(),
+                        java.util.List.of(),
+                        Instant.now()
+                );
+
+        publisher.publicarProntoParaCozinha(event);
+
+        verify(kafkaTemplate).send(TOPICO_COZINHA, PEDIDO_ID.toString(), event);
     }
 }

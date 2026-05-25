@@ -1,5 +1,7 @@
 package br.com.fiaprestaurante.restaurantepedido.application.usecase;
 
+import br.com.fiaprestaurante.restaurantepedido.application.dto.PedidoProntoParaCozinhaEvent;
+import br.com.fiaprestaurante.restaurantepedido.application.port.output.PedidoEventPublisher;
 import br.com.fiaprestaurante.restaurantepedido.application.port.output.PedidoRepository;
 import br.com.fiaprestaurante.restaurantepedido.domain.entity.ItemPedido;
 import br.com.fiaprestaurante.restaurantepedido.domain.entity.Pedido;
@@ -25,7 +27,8 @@ import static org.mockito.Mockito.when;
 /**
  * Testes unitarios do {@link AtualizarStatusPagamentoService} - cobre as
  * transicoes para PAGO e PENDENTE_PAGAMENTO disparadas por eventos Kafka
- * do servico de pagamento.
+ * do servico de pagamento, alem do publish de {@code pedido.pronto-para-cozinha}
+ * apos a aprovacao.
  *
  * @author Danilo Fernando
  */
@@ -37,12 +40,14 @@ class AtualizarStatusPagamentoServiceTest {
     private static final UUID PAGAMENTO_ID = UUID.fromString("33333333-3333-4333-8333-333333333333");
 
     private PedidoRepository pedidoRepository;
+    private PedidoEventPublisher eventPublisher;
     private AtualizarStatusPagamentoService service;
 
     @BeforeEach
     void setUp() {
         pedidoRepository = mock(PedidoRepository.class);
-        service = new AtualizarStatusPagamentoService(pedidoRepository);
+        eventPublisher = mock(PedidoEventPublisher.class);
+        service = new AtualizarStatusPagamentoService(pedidoRepository, eventPublisher);
     }
 
     private Pedido pedidoConfirmado() {
@@ -78,6 +83,7 @@ class AtualizarStatusPagamentoServiceTest {
         verify(pedidoRepository).salvar(captor.capture());
         assertThat(captor.getValue().getStatus()).isEqualTo(StatusPedido.PENDENTE_PAGAMENTO);
         assertThat(captor.getValue().getMotivoPendencia()).isEqualTo("gateway fora");
+        verify(eventPublisher, never()).publicarProntoParaCozinha(any());
     }
 
     @Test
@@ -89,6 +95,7 @@ class AtualizarStatusPagamentoServiceTest {
                 .isInstanceOf(PedidoNaoEncontradoException.class);
 
         verify(pedidoRepository, never()).salvar(any());
+        verify(eventPublisher, never()).publicarProntoParaCozinha(any());
     }
 
     @Test
@@ -100,5 +107,24 @@ class AtualizarStatusPagamentoServiceTest {
                 .isInstanceOf(PedidoNaoEncontradoException.class);
 
         verify(pedidoRepository, never()).salvar(any());
+    }
+
+    @Test
+    void deveNotificarCozinhaAposAprovacao() {
+        Pedido pedido = pedidoConfirmado();
+        when(pedidoRepository.buscarPorId(pedido.getId())).thenReturn(Optional.of(pedido));
+        when(pedidoRepository.salvar(any(Pedido.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.marcarComoPago(pedido.getId(), PAGAMENTO_ID);
+
+        ArgumentCaptor<PedidoProntoParaCozinhaEvent> captor =
+                ArgumentCaptor.forClass(PedidoProntoParaCozinhaEvent.class);
+        verify(eventPublisher).publicarProntoParaCozinha(captor.capture());
+        PedidoProntoParaCozinhaEvent event = captor.getValue();
+        assertThat(event.pedidoId()).isEqualTo(pedido.getId());
+        assertThat(event.restauranteId()).isEqualTo(RESTAURANTE_ID);
+        assertThat(event.itens()).hasSize(1);
+        assertThat(event.itens().get(0).nome()).isEqualTo("X-Burger");
+        assertThat(event.itens().get(0).quantidade()).isEqualTo(1);
     }
 }

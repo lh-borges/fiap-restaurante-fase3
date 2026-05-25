@@ -112,7 +112,7 @@ class PedidoUseCaseServiceTest {
 
     @Test
     void deveAtualizarStatusPagamentoParaPagoEPendente() {
-        AtualizarStatusPagamentoService service = new AtualizarStatusPagamentoService(pedidoRepository);
+        AtualizarStatusPagamentoService service = new AtualizarStatusPagamentoService(pedidoRepository, eventPublisher);
         Pedido pago = TestFixtures.pedidoConfirmado();
         Pedido pendente = TestFixtures.pedidoConfirmado();
         when(pedidoRepository.buscarPorId(TestFixtures.PEDIDO_ID))
@@ -132,7 +132,7 @@ class PedidoUseCaseServiceTest {
 
     @Test
     void deveFalharAoAtualizarPagamentoDePedidoInexistente() {
-        AtualizarStatusPagamentoService service = new AtualizarStatusPagamentoService(pedidoRepository);
+        AtualizarStatusPagamentoService service = new AtualizarStatusPagamentoService(pedidoRepository, eventPublisher);
         when(pedidoRepository.buscarPorId(TestFixtures.PEDIDO_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.marcarComoPago(TestFixtures.PEDIDO_ID, TestFixtures.PAGAMENTO_ID))
