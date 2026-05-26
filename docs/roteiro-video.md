@@ -24,6 +24,22 @@
   [auditoria de conformidade](auditoria-conformidade.md)). Sao para
   o avaliador acompanhar; nao precisa ler em voz alta.
 
+> **🎬 Como executar a demo no Postman**
+>
+> A collection
+> [`fiap-fase-3-restaurante.postman_collection.json`](fiap-fase-3-restaurante.postman_collection.json)
+> tem uma pasta especial **`5. Roteiro do Video`** com **10 requisicoes
+> numeradas em sequencia** (`01 → 10`), batendo exatamente com a ordem
+> dos blocos `3.1`, `3.2`, `3.3`, `3.4`, `3.5`, e `4.1`–`4.4` deste
+> documento. Durante a gravacao, basta executar os requests **na
+> ordem** (clique → Send → proximo). Os tokens e IDs sao salvos
+> automaticamente em variaveis de collection (`{{token}}`,
+> `{{pedidoId}}`), entao nao precisa copiar nada.
+>
+> As demais pastas (`1. Autenticacao`, `2. Pedidos`, `3. Pagamento`,
+> `4. Massa de Testes`) permanecem como referencia de todas as
+> operacoes individuais — uteis fora do roteiro.
+
 ## Estrutura
 
 | Bloco | Tempo | Tema | Conceitos centrais |
@@ -182,7 +198,7 @@ docker compose ps
 ### 3.1 · Login e JWT (20s)
 
 ```
-Postman -> 1. Autenticacao -> Login como Usuario
+Postman -> 5. Roteiro do Video -> 01 - Login como Usuario (bloco 3.1)
 ```
 
 > "Faco login como cliente. Recebo um **JWT assinado em RS256**."
@@ -200,7 +216,7 @@ Postman -> 1. Autenticacao -> Login como Usuario
 ### 3.2 · Criar pedido (30s)
 
 ```
-Postman -> 2. Pedidos -> Criar Pedido
+Postman -> 5. Roteiro do Video -> 02 - Criar Pedido (bloco 3.2)
 ```
 
 > "Crio o pedido com dois itens. **Repare que nao envio o
@@ -214,7 +230,7 @@ Mostre a resposta: `id`, `valorTotal` calculado, `status: CRIADO`.
 ### 3.3 · Confirmar pedido (40s)
 
 ```
-Postman -> 2. Pedidos -> Confirmar Pedido
+Postman -> 5. Roteiro do Video -> 03 - Confirmar Pedido (bloco 3.3)
 ```
 
 > "Confirmo. Isso publica o evento `pedido.criado` no Kafka."
@@ -230,7 +246,7 @@ Postman -> 2. Pedidos -> Confirmar Pedido
 ### 3.4 · Ver status PAGO (15s)
 
 ```
-Postman -> 2. Pedidos -> Pedido por ID
+Postman -> 5. Roteiro do Video -> 04 - Pedido por ID (espera PAGO - bloco 3.4)
 ```
 
 > "Status `PAGO`. **Sem que eu tenha clicado em mais nada.** O
@@ -272,6 +288,15 @@ Postman -> 2. Pedidos -> Pedido por ID
 > Pra ver a documentacao completa do schema (todas as queries,
 > mutations e tipos), eh so clicar em 'Docs' no canto superior
 > direito."
+
+**No Postman, faca o login do DONO para pegar o token:**
+
+```
+Postman -> 5. Roteiro do Video -> 05 - Login como Dono (token p/ GraphiQL :8084 - bloco 3.5)
+```
+
+> "Copio o token desta response (campo `data.login.token`) e
+> colo no Request Headers do GraphiQL `:8084`."
 
 **Agora na pratica, no GraphiQL `:8084`, com token de `dono@fiap.com` ja colado em Request Headers:**
 
@@ -341,8 +366,14 @@ docker stop procpag
 
 ### 4.2 · Criar e confirmar novo pedido (30s)
 
+**Importante:** antes destes dois, execute `06 - Re-login como Usuario`
+para garantir que o `{{token}}` esta com perfil USUARIO (o passo 05
+trocou o token para DONO).
+
 ```
-Postman -> Criar Pedido + Confirmar Pedido
+Postman -> 5. Roteiro do Video -> 06 - Re-login como Usuario (preparar bloco 4)
+Postman -> 5. Roteiro do Video -> 07 - Criar Pedido (gateway off - bloco 4.2)
+Postman -> 5. Roteiro do Video -> 08 - Confirmar Pedido (gateway off - bloco 4.2)
 ```
 
 > "Postman: novo pedido, confirmacao. O `pagamento-service`
@@ -367,7 +398,7 @@ Postman -> Criar Pedido + Confirmar Pedido
 ### 4.3 · Ver status PENDENTE_PAGAMENTO (10s)
 
 ```
-Postman -> Pedido por ID
+Postman -> 5. Roteiro do Video -> 09 - Pedido por ID (espera PENDENTE_PAGAMENTO - bloco 4.3)
 ```
 
 > "`PENDENTE_PAGAMENTO`. **O cliente nao recebeu erro.** O sistema
@@ -395,7 +426,7 @@ docker start procpag
 > "*Reprocessando pedido pendente... aprovado!*"
 
 ```
-Postman -> Pedido por ID
+Postman -> 5. Roteiro do Video -> 10 - Pedido por ID (espera PAGO apos reprocesso - bloco 4.4)
 ```
 
 > "`PAGO`. **Recuperou sozinho.**"
