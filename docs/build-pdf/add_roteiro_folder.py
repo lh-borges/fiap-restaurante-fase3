@@ -3,8 +3,9 @@
 Adiciona a pasta "5. Roteiro do Video" na collection Postman, com requests
 numerados na ordem EXATA dos passos demonstrados no docs/roteiro-video.md.
 
-Cada request eh uma copia adaptada dos existentes em "1. Autenticacao" e
-"2. Pedidos". As outras pastas (1, 2, 3, 4) ficam intactas.
+Cada request eh uma copia adaptada dos existentes em "1. Autenticacao",
+"2. Pedidos" e do schema GraphQL do restaurante-service (cozinha).
+As outras pastas (1, 2, 3, 4) ficam intactas.
 
 Como rodar:
     docker run --rm -v <repo>:/work -w /work/docs/build-pdf python:3.12-slim \\
@@ -12,7 +13,6 @@ Como rodar:
 """
 
 import json
-from copy import deepcopy
 from pathlib import Path
 
 COLLECTION = (
@@ -196,6 +196,112 @@ def _request_pedido_por_id(label: str) -> dict:
     }
 
 
+def _request_fila_cozinha(label: str) -> dict:
+    """Lista a fila da cozinha; salva o pedidoCozinhaId do pedido corrente."""
+    return {
+        "name": label,
+        "event": [
+            {
+                "listen": "test",
+                "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                        "var json = pm.response.json();",
+                        "var fila = json && json.data ? json.data.filaCozinha : null;",
+                        "if (!fila || !fila.length) {",
+                        "    console.warn('Fila vazia. Verifique se o passo 04 ja chegou em PAGO. Resposta:', JSON.stringify(json));",
+                        "    return;",
+                        "}",
+                        "var alvo = pm.collectionVariables.get('pedidoId');",
+                        "var item = fila.find(function(p) { return p.pedidoId === alvo; }) || fila[0];",
+                        "pm.collectionVariables.set('pedidoCozinhaId', item.id);",
+                        "console.log('pedidoCozinhaId salvo:', item.id, '| status:', item.status, '| pedidoId:', item.pedidoId);",
+                    ],
+                },
+            }
+        ],
+        "request": {
+            "method": "POST",
+            "url": "{{cozinhaUrl}}",
+            "header": [
+                {"key": "Content-Type", "value": "application/json"},
+                {"key": "Authorization", "value": "Bearer {{token}}"},
+            ],
+            "body": {
+                "mode": "graphql",
+                "graphql": {
+                    "query": (
+                        "query FilaCozinha {\n"
+                        "  filaCozinha {\n"
+                        "    id pedidoId restauranteId status createdAt\n"
+                        "    itens { produtoId nome quantidade }\n"
+                        "  }\n"
+                        "}"
+                    ),
+                    "variables": "{}",
+                },
+            },
+        },
+        "response": [],
+    }
+
+
+def _request_iniciar_preparo(label: str) -> dict:
+    return {
+        "name": label,
+        "request": {
+            "method": "POST",
+            "url": "{{cozinhaUrl}}",
+            "header": [
+                {"key": "Content-Type", "value": "application/json"},
+                {"key": "Authorization", "value": "Bearer {{token}}"},
+            ],
+            "body": {
+                "mode": "graphql",
+                "graphql": {
+                    "query": (
+                        "mutation IniciarPreparo($pedidoCozinhaId: ID!) {\n"
+                        "  iniciarPreparo(pedidoCozinhaId: $pedidoCozinhaId) {\n"
+                        "    id pedidoId status iniciadoEm updatedAt\n"
+                        "  }\n"
+                        "}"
+                    ),
+                    "variables": '{\n  "pedidoCozinhaId": "{{pedidoCozinhaId}}"\n}',
+                },
+            },
+        },
+        "response": [],
+    }
+
+
+def _request_marcar_pronto(label: str) -> dict:
+    return {
+        "name": label,
+        "request": {
+            "method": "POST",
+            "url": "{{cozinhaUrl}}",
+            "header": [
+                {"key": "Content-Type", "value": "application/json"},
+                {"key": "Authorization", "value": "Bearer {{token}}"},
+            ],
+            "body": {
+                "mode": "graphql",
+                "graphql": {
+                    "query": (
+                        "mutation MarcarComoPronto($pedidoCozinhaId: ID!) {\n"
+                        "  marcarComoPronto(pedidoCozinhaId: $pedidoCozinhaId) {\n"
+                        "    id pedidoId status finalizadoEm updatedAt\n"
+                        "  }\n"
+                        "}"
+                    ),
+                    "variables": '{\n  "pedidoCozinhaId": "{{pedidoCozinhaId}}"\n}',
+                },
+            },
+        },
+        "response": [],
+    }
+
+
 def build_roteiro_folder() -> dict:
     """A pasta `5. Roteiro do Video` na ordem exata do roteiro."""
     return {
@@ -203,16 +309,16 @@ def build_roteiro_folder() -> dict:
         "description": (
             "Sequencia EXATA das acoes do roteiro de gravacao "
             "(docs/roteiro-video.md). Execute os requests em ordem: o passo "
-            "N depende do que o passo N-1 deixou em {{token}} e {{pedidoId}}.\n\n"
+            "N depende do que o passo N-1 deixou em {{token}}, {{pedidoId}} "
+            "e {{pedidoCozinhaId}}.\n\n"
             "Numeracao casa com a referencia no roteiro: \"Postman -> 5. "
-            "Roteiro do Video -> 03 - Confirmar Pedido (happy path)\".\n\n"
+            "Roteiro do Video -> 03 - Confirmar Pedido (bloco 3.3)\".\n\n"
             "Estrutura:\n"
             "  - Passos 01-04: bloco 3 do roteiro (happy path Postman)\n"
-            "  - Passo 05: prepara token DONO para usar no GraphiQL :8084 (bloco 3.5)\n"
-            "  - Passo 06: volta para USUARIO (bloco 4, demo resiliencia)\n"
-            "  - Passos 07-10: demo de resiliencia (gateway off -> reprocesso)\n\n"
-            "Cada request tem descricao curta indicando qual bloco do roteiro "
-            "ele corresponde."
+            "  - Passos 05-10: bloco 3.5 — fluxo da cozinha (DONO_RESTAURANTE)\n"
+            "  - Passos 11-14: bloco 4 — demo de resiliencia (gateway off -> reprocesso)\n\n"
+            "Pre-requisitos: subir tudo com `docker compose up -d --build` e "
+            "ativar o environment `fiap-fase-3-restaurante`."
         ),
         "item": [
             # ---- BLOCO 3: HAPPY PATH ----
@@ -250,44 +356,76 @@ def build_roteiro_folder() -> dict:
                     "Status esperado: PAGO. Tudo automatico, sem intervencao."
                 ),
             },
-            # ---- BLOCO 3.5: PREPARAR TOKEN DONO P/ GRAPHIQL ----
+            # ---- BLOCO 3.5: FLUXO DA COZINHA (DONO_RESTAURANTE) ----
             {
                 **_request_login(
-                    "05 - Login como Dono (token p/ GraphiQL :8084 - bloco 3.5)",
+                    "05 - Login como Dono (bloco 3.5 - cozinha)",
                     "donoEmail",
                     "donoSenha",
                 ),
                 "description": (
-                    "ROTEIRO BLOCO 3.5 — Loga como DONO_RESTAURANTE para obter um "
-                    "token com o perfil necessario. COPIE o token da response e cole "
-                    "em Request Headers do GraphiQL `:8084/graphiql` no formato:\n\n"
-                    '{ "Authorization": "Bearer <token>" }\n\n'
-                    "No GraphiQL, rode `filaCozinha`, depois `iniciarPreparo` e "
-                    "`marcarComoPronto`."
+                    "ROTEIRO BLOCO 3.5 — Loga como DONO_RESTAURANTE. O {{token}} "
+                    "passa a ter o perfil necessario para chamar as queries/mutations "
+                    "do restaurante-service (`:8084`)."
                 ),
             },
-            # ---- BLOCO 4: DEMO DE RESILIENCIA ----
+            {
+                **_request_fila_cozinha("06 - Fila da Cozinha (bloco 3.5)"),
+                "description": (
+                    "ROTEIRO BLOCO 3.5 — Lista os pedidos na cozinha. O test script "
+                    "localiza o item cujo pedidoId == {{pedidoId}} e salva seu id "
+                    "em {{pedidoCozinhaId}} para os proximos passos. Status esperado "
+                    "do item: RECEBIDO."
+                ),
+            },
+            {
+                **_request_iniciar_preparo("07 - Iniciar Preparo (bloco 3.5)"),
+                "description": (
+                    "ROTEIRO BLOCO 3.5 — Marca o pedido como EM_PREPARO. Publica "
+                    "`pedido.em-preparo` no Kafka; o restaurante-pedido consome e "
+                    "atualiza o agregado principal."
+                ),
+            },
+            {
+                **_request_marcar_pronto("08 - Marcar como Pronto (bloco 3.5)"),
+                "description": (
+                    "ROTEIRO BLOCO 3.5 — Marca o pedido como PRONTO. Publica "
+                    "`pedido.pronto` no Kafka; o restaurante-pedido consome e "
+                    "reflete o status final."
+                ),
+            },
             {
                 **_request_login(
-                    "06 - Re-login como Usuario (preparar bloco 4)",
+                    "09 - Re-login como Usuario (bloco 3.5 - voltar p/ consulta)",
                     "usuarioEmail",
                     "usuarioSenha",
                 ),
                 "description": (
-                    "ROTEIRO BLOCO 4 — Antes da demo de resiliencia, volte o "
-                    "{{token}} para USUARIO. O pedido a ser criado nos proximos "
-                    "passos pertencera ao cliente comum (ownership check)."
+                    "ROTEIRO BLOCO 3.5 — Volta o {{token}} para USUARIO antes da "
+                    "consulta final ao pedido original (a query `pedidoPorId` exige "
+                    "que o cliente seja o dono do pedido)."
                 ),
             },
             {
-                **_request_criar_pedido("07 - Criar Pedido (gateway off - bloco 4.2)"),
+                **_request_pedido_por_id(
+                    "10 - Pedido por ID (espera PRONTO - fim do bloco 3.5)"
+                ),
+                "description": (
+                    "ROTEIRO BLOCO 3.5 — Consulta o pedido original. Status "
+                    "esperado: PRONTO. Prova que os 4 microsservicos conversaram "
+                    "via Kafka sem nenhuma chamada sincrona entre eles."
+                ),
+            },
+            # ---- BLOCO 4: DEMO DE RESILIENCIA ----
+            {
+                **_request_criar_pedido("11 - Criar Pedido (gateway off - bloco 4.2)"),
                 "description": (
                     "ROTEIRO BLOCO 4.2 — Cria novo pedido. Pre-requisito: "
                     "`docker stop procpag` ja foi executado no terminal."
                 ),
             },
             {
-                **_request_confirmar("08 - Confirmar Pedido (gateway off - bloco 4.2)"),
+                **_request_confirmar("12 - Confirmar Pedido (gateway off - bloco 4.2)"),
                 "description": (
                     "ROTEIRO BLOCO 4.2 — Confirma o pedido com o gateway fora. "
                     "O pagamento-service vai tentar 3x (Retry), abrir o Circuit "
@@ -297,17 +435,17 @@ def build_roteiro_folder() -> dict:
             },
             {
                 **_request_pedido_por_id(
-                    "09 - Pedido por ID (espera PENDENTE_PAGAMENTO - bloco 4.3)"
+                    "13 - Pedido por ID (espera PENDENTE_PAGAMENTO - bloco 4.3)"
                 ),
                 "description": (
-                    "ROTEIRO BLOCO 4.3 — Aguarde ~10-15s apos o passo 08. Status "
+                    "ROTEIRO BLOCO 4.3 — Aguarde ~10-15s apos o passo 12. Status "
                     "esperado: PENDENTE_PAGAMENTO. O cliente nao recebeu erro — "
                     "o sistema absorveu a falha."
                 ),
             },
             {
                 **_request_pedido_por_id(
-                    "10 - Pedido por ID (espera PAGO apos reprocesso - bloco 4.4)"
+                    "14 - Pedido por ID (espera PAGO apos reprocesso - bloco 4.4)"
                 ),
                 "description": (
                     "ROTEIRO BLOCO 4.4 — Pre-requisito: `docker start procpag` ja "
@@ -344,6 +482,8 @@ def main() -> None:
         f"Pasta 5 - Roteiro do Video: "
         f"{len(data['item'][-1]['item'])} requests"
     )
+    for req in data["item"][-1]["item"]:
+        print(f"  - {req['name']}")
 
 
 if __name__ == "__main__":

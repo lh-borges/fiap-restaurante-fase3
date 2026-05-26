@@ -201,7 +201,7 @@ Na pasta [`docs/`](docs/):
 | `2. Pedidos` | Status do módulo, criar/confirmar pedido, consultar por ID, listar meus pedidos |
 | `3. Pagamento` | Consultar pagamento por pedido, listar pagamentos pendentes |
 | `4. Massa de Testes` | Fluxo otimizado para o Collection Runner — gera pedidos com itens aleatórios |
-| `5. Roteiro do Video` | **10 requisições numeradas (`01 → 10`)** que seguem exatamente a ordem dos blocos 3.x e 4.x do [`docs/roteiro-video.md`](docs/roteiro-video.md). Basta executar em sequência durante a gravação |
+| `5. Roteiro do Video` | **14 requisições numeradas (`01 → 14`)** que seguem exatamente a ordem dos blocos 3.x (incluindo cozinha) e 4.x do [`docs/roteiro-video.md`](docs/roteiro-video.md). Basta executar em sequência durante a gravação |
 
 ### Fluxo de teste manual (passo a passo)
 
@@ -247,28 +247,33 @@ A pasta `5. Roteiro do Video` espelha **um a um** os passos do
 nome no formato `NN - Ação (bloco X.Y)` apontando para o bloco
 correspondente do roteiro:
 
-| Nº | Request | Bloco do roteiro |
-|----|---------|------------------|
-| 01 | Login como Usuario | 3.1 |
-| 02 | Criar Pedido | 3.2 |
-| 03 | Confirmar Pedido | 3.3 |
-| 04 | Pedido por ID (espera `PAGO`) | 3.4 |
-| 05 | Login como Dono (token p/ GraphiQL `:8084`) | 3.5 |
-| 06 | Re-login como Usuario (preparar bloco 4) | 4.1 |
-| 07 | Criar Pedido (gateway off) | 4.2 |
-| 08 | Confirmar Pedido (gateway off) | 4.2 |
-| 09 | Pedido por ID (espera `PENDENTE_PAGAMENTO`) | 4.3 |
-| 10 | Pedido por ID (espera `PAGO` após reprocesso) | 4.4 |
+| Nº | Request | Bloco | Perfil do `{{token}}` |
+|----|---------|-------|-----------------------|
+| 01 | Login como Usuario | 3.1 | USUARIO |
+| 02 | Criar Pedido | 3.2 | USUARIO |
+| 03 | Confirmar Pedido | 3.3 | USUARIO |
+| 04 | Pedido por ID (espera `PAGO`) | 3.4 | USUARIO |
+| 05 | Login como Dono | 3.5 | DONO_RESTAURANTE |
+| 06 | Fila da Cozinha (salva `{{pedidoCozinhaId}}`) | 3.5 | DONO_RESTAURANTE |
+| 07 | Iniciar Preparo | 3.5 | DONO_RESTAURANTE |
+| 08 | Marcar como Pronto | 3.5 | DONO_RESTAURANTE |
+| 09 | Re-login como Usuario | 3.5 | USUARIO |
+| 10 | Pedido por ID (espera `PRONTO`) | 3.5 | USUARIO |
+| 11 | Criar Pedido (gateway off) | 4.2 | USUARIO |
+| 12 | Confirmar Pedido (gateway off) | 4.2 | USUARIO |
+| 13 | Pedido por ID (espera `PENDENTE_PAGAMENTO`) | 4.3 | USUARIO |
+| 14 | Pedido por ID (espera `PAGO` após reprocesso) | 4.4 | USUARIO |
 
 **Como usar:** durante a gravação, abra a pasta e dispare os requests
-**em ordem**, do `01` ao `10`. O JWT (`{{token}}`) e o `{{pedidoId}}`
-são salvos automaticamente entre requests, então não precisa copiar
-nada. Entre o `04` e o `07`, derrube o `procpag`:
+**em ordem**, do `01` ao `14`. O JWT (`{{token}}`), o `{{pedidoId}}`
+e o `{{pedidoCozinhaId}}` são salvos automaticamente entre requests,
+então não precisa copiar nada. Entre o `10` e o `11`, derrube o
+`procpag`:
 
 ```bash
-docker stop procpag      # antes do request 07
-# ... execute 07, 08, 09, aguarde ~30s, religue ...
-docker start procpag     # antes do request 10
+docker stop procpag      # antes do request 11
+# ... execute 11, 12, 13, aguarde ~30s, religue ...
+docker start procpag     # antes do request 14
 ```
 
 ---

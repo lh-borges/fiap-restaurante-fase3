@@ -551,7 +551,7 @@
     },
     {
       "name": "5. Roteiro do Video",
-      "description": "Sequencia EXATA das acoes do roteiro de gravacao (docs/roteiro-video.md). Execute os requests em ordem: o passo N depende do que o passo N-1 deixou em {{token}} e {{pedidoId}}.\n\nNumeracao casa com a referencia no roteiro: \"Postman -> 5. Roteiro do Video -> 03 - Confirmar Pedido (happy path)\".\n\nEstrutura:\n  - Passos 01-04: bloco 3 do roteiro (happy path Postman)\n  - Passo 05: prepara token DONO para usar no GraphiQL :8084 (bloco 3.5)\n  - Passo 06: volta para USUARIO (bloco 4, demo resiliencia)\n  - Passos 07-10: demo de resiliencia (gateway off -> reprocesso)\n\nCada request tem descricao curta indicando qual bloco do roteiro ele corresponde.",
+      "description": "Sequencia EXATA das acoes do roteiro de gravacao (docs/roteiro-video.md). Execute os requests em ordem: o passo N depende do que o passo N-1 deixou em {{token}}, {{pedidoId}} e {{pedidoCozinhaId}}.\n\nNumeracao casa com a referencia no roteiro: \"Postman -> 5. Roteiro do Video -> 03 - Confirmar Pedido (bloco 3.3)\".\n\nEstrutura:\n  - Passos 01-04: bloco 3 do roteiro (happy path Postman)\n  - Passos 05-10: bloco 3.5 — fluxo da cozinha (DONO_RESTAURANTE)\n  - Passos 11-14: bloco 4 — demo de resiliencia (gateway off -> reprocesso)\n\nPre-requisitos: subir tudo com `docker compose up -d --build` e ativar o environment `fiap-fase-3-restaurante`.",
       "item": [
         {
           "name": "01 - Login como Usuario (bloco 3.1)",
@@ -690,7 +690,7 @@
           "description": "ROTEIRO BLOCO 3.4 — Aguarde ~5s apos o passo 03 e rode este. Status esperado: PAGO. Tudo automatico, sem intervencao."
         },
         {
-          "name": "05 - Login como Dono (token p/ GraphiQL :8084 - bloco 3.5)",
+          "name": "05 - Login como Dono (bloco 3.5 - cozinha)",
           "event": [
             {
               "listen": "test",
@@ -727,10 +727,108 @@
             }
           },
           "response": [],
-          "description": "ROTEIRO BLOCO 3.5 — Loga como DONO_RESTAURANTE para obter um token com o perfil necessario. COPIE o token da response e cole em Request Headers do GraphiQL `:8084/graphiql` no formato:\n\n{ \"Authorization\": \"Bearer <token>\" }\n\nNo GraphiQL, rode `filaCozinha`, depois `iniciarPreparo` e `marcarComoPronto`."
+          "description": "ROTEIRO BLOCO 3.5 — Loga como DONO_RESTAURANTE. O {{token}} passa a ter o perfil necessario para chamar as queries/mutations do restaurante-service (`:8084`)."
         },
         {
-          "name": "06 - Re-login como Usuario (preparar bloco 4)",
+          "name": "06 - Fila da Cozinha (bloco 3.5)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var json = pm.response.json();",
+                  "var fila = json && json.data ? json.data.filaCozinha : null;",
+                  "if (!fila || !fila.length) {",
+                  "    console.warn('Fila vazia. Verifique se o passo 04 ja chegou em PAGO. Resposta:', JSON.stringify(json));",
+                  "    return;",
+                  "}",
+                  "var alvo = pm.collectionVariables.get('pedidoId');",
+                  "var item = fila.find(function(p) { return p.pedidoId === alvo; }) || fila[0];",
+                  "pm.collectionVariables.set('pedidoCozinhaId', item.id);",
+                  "console.log('pedidoCozinhaId salvo:', item.id, '| status:', item.status, '| pedidoId:', item.pedidoId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{cozinhaUrl}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query FilaCozinha {\n  filaCozinha {\n    id pedidoId restauranteId status createdAt\n    itens { produtoId nome quantidade }\n  }\n}",
+                "variables": "{}"
+              }
+            }
+          },
+          "response": [],
+          "description": "ROTEIRO BLOCO 3.5 — Lista os pedidos na cozinha. O test script localiza o item cujo pedidoId == {{pedidoId}} e salva seu id em {{pedidoCozinhaId}} para os proximos passos. Status esperado do item: RECEBIDO."
+        },
+        {
+          "name": "07 - Iniciar Preparo (bloco 3.5)",
+          "request": {
+            "method": "POST",
+            "url": "{{cozinhaUrl}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation IniciarPreparo($pedidoCozinhaId: ID!) {\n  iniciarPreparo(pedidoCozinhaId: $pedidoCozinhaId) {\n    id pedidoId status iniciadoEm updatedAt\n  }\n}",
+                "variables": "{\n  \"pedidoCozinhaId\": \"{{pedidoCozinhaId}}\"\n}"
+              }
+            }
+          },
+          "response": [],
+          "description": "ROTEIRO BLOCO 3.5 — Marca o pedido como EM_PREPARO. Publica `pedido.em-preparo` no Kafka; o restaurante-pedido consome e atualiza o agregado principal."
+        },
+        {
+          "name": "08 - Marcar como Pronto (bloco 3.5)",
+          "request": {
+            "method": "POST",
+            "url": "{{cozinhaUrl}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation MarcarComoPronto($pedidoCozinhaId: ID!) {\n  marcarComoPronto(pedidoCozinhaId: $pedidoCozinhaId) {\n    id pedidoId status finalizadoEm updatedAt\n  }\n}",
+                "variables": "{\n  \"pedidoCozinhaId\": \"{{pedidoCozinhaId}}\"\n}"
+              }
+            }
+          },
+          "response": [],
+          "description": "ROTEIRO BLOCO 3.5 — Marca o pedido como PRONTO. Publica `pedido.pronto` no Kafka; o restaurante-pedido consome e reflete o status final."
+        },
+        {
+          "name": "09 - Re-login como Usuario (bloco 3.5 - voltar p/ consulta)",
           "event": [
             {
               "listen": "test",
@@ -767,10 +865,36 @@
             }
           },
           "response": [],
-          "description": "ROTEIRO BLOCO 4 — Antes da demo de resiliencia, volte o {{token}} para USUARIO. O pedido a ser criado nos proximos passos pertencera ao cliente comum (ownership check)."
+          "description": "ROTEIRO BLOCO 3.5 — Volta o {{token}} para USUARIO antes da consulta final ao pedido original (a query `pedidoPorId` exige que o cliente seja o dono do pedido)."
         },
         {
-          "name": "07 - Criar Pedido (gateway off - bloco 4.2)",
+          "name": "10 - Pedido por ID (espera PRONTO - fim do bloco 3.5)",
+          "request": {
+            "method": "POST",
+            "url": "{{pedidoUrl}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query PedidoPorId($pedidoId: ID!) {\n  pedidoPorId(pedidoId: $pedidoId) {\n    id status valorTotal pagamentoId motivoPendencia\n    itens { produtoId nome quantidade preco subtotal }\n    createdAt updatedAt\n  }\n}",
+                "variables": "{\n  \"pedidoId\": \"{{pedidoId}}\"\n}"
+              }
+            }
+          },
+          "response": [],
+          "description": "ROTEIRO BLOCO 3.5 — Consulta o pedido original. Status esperado: PRONTO. Prova que os 4 microsservicos conversaram via Kafka sem nenhuma chamada sincrona entre eles."
+        },
+        {
+          "name": "11 - Criar Pedido (gateway off - bloco 4.2)",
           "event": [
             {
               "listen": "test",
@@ -814,7 +938,7 @@
           "description": "ROTEIRO BLOCO 4.2 — Cria novo pedido. Pre-requisito: `docker stop procpag` ja foi executado no terminal."
         },
         {
-          "name": "08 - Confirmar Pedido (gateway off - bloco 4.2)",
+          "name": "12 - Confirmar Pedido (gateway off - bloco 4.2)",
           "request": {
             "method": "POST",
             "url": "{{pedidoUrl}}",
@@ -840,7 +964,7 @@
           "description": "ROTEIRO BLOCO 4.2 — Confirma o pedido com o gateway fora. O pagamento-service vai tentar 3x (Retry), abrir o Circuit Breaker apos varias falhas e cair no Fallback. Acompanhe em `docker logs -f pagamento-service` no terminal."
         },
         {
-          "name": "09 - Pedido por ID (espera PENDENTE_PAGAMENTO - bloco 4.3)",
+          "name": "13 - Pedido por ID (espera PENDENTE_PAGAMENTO - bloco 4.3)",
           "request": {
             "method": "POST",
             "url": "{{pedidoUrl}}",
@@ -863,10 +987,10 @@
             }
           },
           "response": [],
-          "description": "ROTEIRO BLOCO 4.3 — Aguarde ~10-15s apos o passo 08. Status esperado: PENDENTE_PAGAMENTO. O cliente nao recebeu erro — o sistema absorveu a falha."
+          "description": "ROTEIRO BLOCO 4.3 — Aguarde ~10-15s apos o passo 12. Status esperado: PENDENTE_PAGAMENTO. O cliente nao recebeu erro — o sistema absorveu a falha."
         },
         {
-          "name": "10 - Pedido por ID (espera PAGO apos reprocesso - bloco 4.4)",
+          "name": "14 - Pedido por ID (espera PAGO apos reprocesso - bloco 4.4)",
           "request": {
             "method": "POST",
             "url": "{{pedidoUrl}}",
