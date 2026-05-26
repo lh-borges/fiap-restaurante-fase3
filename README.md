@@ -191,7 +191,7 @@ Na pasta [`docs/`](docs/):
 
 1. No Postman: **Import** → selecione os **dois** arquivos acima.
 2. No seletor de environment (canto superior direito), **ative o environment `fiap-fase-3-restaurante`**. Sem isso, variáveis como `{{authUrl}}` ficam vazias e as requisições falham.
-3. Pronto — a collection `fiap-fase-3-restaurante` aparece organizada em **4 pastas**.
+3. Pronto — a collection `fiap-fase-3-restaurante` aparece organizada em **5 pastas**.
 
 ### Estrutura da collection
 
@@ -201,6 +201,7 @@ Na pasta [`docs/`](docs/):
 | `2. Pedidos` | Status do módulo, criar/confirmar pedido, consultar por ID, listar meus pedidos |
 | `3. Pagamento` | Consultar pagamento por pedido, listar pagamentos pendentes |
 | `4. Massa de Testes` | Fluxo otimizado para o Collection Runner — gera pedidos com itens aleatórios |
+| `5. Roteiro do Video` | **10 requisições numeradas (`01 → 10`)** que seguem exatamente a ordem dos blocos 3.x e 4.x do [`docs/roteiro-video.md`](docs/roteiro-video.md). Basta executar em sequência durante a gravação |
 
 ### Fluxo de teste manual (passo a passo)
 
@@ -238,6 +239,37 @@ docker start procpag     # depois de rodar a massa
 ```
 
 Os pedidos criados com o gateway fora ficam `PENDENTE_PAGAMENTO` e são reprocessados automaticamente pelo worker quando ele volta. Confira o resultado em `2. Pedidos` → **Meus Pedidos**.
+
+### Roteiro do vídeo (execução guiada — `5. Roteiro do Video`)
+
+A pasta `5. Roteiro do Video` espelha **um a um** os passos do
+[`docs/roteiro-video.md`](docs/roteiro-video.md). Cada request tem um
+nome no formato `NN - Ação (bloco X.Y)` apontando para o bloco
+correspondente do roteiro:
+
+| Nº | Request | Bloco do roteiro |
+|----|---------|------------------|
+| 01 | Login como Usuario | 3.1 |
+| 02 | Criar Pedido | 3.2 |
+| 03 | Confirmar Pedido | 3.3 |
+| 04 | Pedido por ID (espera `PAGO`) | 3.4 |
+| 05 | Login como Dono (token p/ GraphiQL `:8084`) | 3.5 |
+| 06 | Re-login como Usuario (preparar bloco 4) | 4.1 |
+| 07 | Criar Pedido (gateway off) | 4.2 |
+| 08 | Confirmar Pedido (gateway off) | 4.2 |
+| 09 | Pedido por ID (espera `PENDENTE_PAGAMENTO`) | 4.3 |
+| 10 | Pedido por ID (espera `PAGO` após reprocesso) | 4.4 |
+
+**Como usar:** durante a gravação, abra a pasta e dispare os requests
+**em ordem**, do `01` ao `10`. O JWT (`{{token}}`) e o `{{pedidoId}}`
+são salvos automaticamente entre requests, então não precisa copiar
+nada. Entre o `04` e o `07`, derrube o `procpag`:
+
+```bash
+docker stop procpag      # antes do request 07
+# ... execute 07, 08, 09, aguarde ~30s, religue ...
+docker start procpag     # antes do request 10
+```
 
 ---
 
