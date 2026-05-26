@@ -402,10 +402,9 @@ def build(filename: str):
     # ------------------------------------------------------------- #
     # ACESSO AO CODIGO E AO VIDEO (elemento pre-textual)
     # ------------------------------------------------------------- #
-    # URLs centralizadas aqui para facilitar manutencao: trocar
-    # YOUTUBE_URL para a string da URL apos a gravacao e regerar o PDF.
+    # URLs centralizadas aqui para facilitar manutencao.
     GITHUB_URL = "https://github.com/lh-borges/fiap-restaurante-fase3"
-    YOUTUBE_URL = None  # ex.: "https://youtu.be/XXXXXXXXXXX" apos a publicacao
+    YOUTUBE_URL = "https://www.youtube.com/watch?v=gdcr4CRtNLU"
 
     story.append(Spacer(1, 4 * cm))
     story.append(p("ACESSO AO CÓDIGO E AO VÍDEO", h1))

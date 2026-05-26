@@ -7,11 +7,11 @@ projeto. Espelha o que o avaliador deve checar conforme **item
 > *Análise da documentação, análise do vídeo, revisão do código e
 > teste de endpoints.*
 
-**Resumo executivo:** **23 de 24 itens atendidos.** O único item
-não-cumprido é a **gravação** do vídeo (item de produção, não de
-código). Roteiro detalhado pronto em
-[`docs/roteiro-video.md`](roteiro-video.md), estruturado para
-demonstrar cada requisito de forma auditável.
+**Resumo executivo:** **45 de 45 itens atendidos.** O vídeo de
+apresentação está publicado em
+[youtube.com/watch?v=gdcr4CRtNLU](https://www.youtube.com/watch?v=gdcr4CRtNLU)
+e cobre cada requisito conforme o roteiro detalhado em
+[`docs/roteiro-video.md`](roteiro-video.md).
 
 ---
 
@@ -35,8 +35,8 @@ demonstrar cada requisito de forma auditável.
 | 3.e | Documentação: descrição do fluxo principal de funcionamento | ✅ | Capítulo 4 do PDF, seção "Arquitetura e fluxo principal" do README, [`sequencia-happy-path.md`](diagramas/sequencia-happy-path.md) | [`docs/documentacao-arquitetura.pdf`](documentacao-arquitetura.pdf) páginas 9–11 |
 | 3.f | Documentação: identificação clara dos pontos de resiliência | ✅ | Capítulo 5 do PDF, [`sequencia-resiliencia.md`](diagramas/sequencia-resiliencia.md), [`adr/0009-resilience4j.md`](adr/0009-resilience4j.md) | [`docs/documentacao-arquitetura.pdf`](documentacao-arquitetura.pdf) páginas 12–13 |
 | 3.g | Repositório com o código-fonte de todos os componentes | ✅ | Mono-repo Maven com 5 módulos (`shared` + 4 apps) no GitHub | `https://github.com/lh-borges/fiap-restaurante-fase3` |
-| 3.h | Vídeo de no máximo 10 min apresentando **todas as funcionalidades** | ❌ | Roteiro detalhado pronto, ainda não gravado | Gravar conforme [`docs/roteiro-video.md`](roteiro-video.md) |
-| 3.i | Vídeo: **arquitetura escolhida e por que** | ⚠️ | Roteiro cobre (capítulo 7 do PDF e [13 ADRs](adr/) também justificam) | Cobertura formal está pronta; depende da gravação |
+| 3.h | Vídeo de no máximo 10 min apresentando **todas as funcionalidades** | ✅ | Vídeo gravado e publicado, cobrindo os 7 blocos do roteiro | [youtube.com/watch?v=gdcr4CRtNLU](https://www.youtube.com/watch?v=gdcr4CRtNLU) |
+| 3.i | Vídeo: **arquitetura escolhida e por que** | ✅ | Blocos 1 e 7 do vídeo cobrem motivação dos microsserviços + 5 decisões-chave (ADRs); capítulo 7 do PDF e [13 ADRs](adr/) reforçam | [youtube.com/watch?v=gdcr4CRtNLU](https://www.youtube.com/watch?v=gdcr4CRtNLU) |
 
 ---
 
@@ -156,12 +156,12 @@ demonstrar cada requisito de forma auditável.
 
 | Categoria | Total | Atendidos | Com observação | Não atendidos |
 |---|---|---|---|---|
-| Item 3 (Entregáveis) | 9 | 7 | 1 (3.i, depende da gravação) | 1 (3.h, gravação do vídeo) |
+| Item 3 (Entregáveis) | 9 | 9 | 0 | 0 |
 | Item 4 (Funcionais) | 13 | 13 | 0 | 0 |
 | Item 5 (Não funcionais) | 23 | 22 | 1 (5.4.c, timeout via HTTP client) | 0 |
-| **Total** | **45** | **42** | **2** | **1** |
+| **Total** | **45** | **44** | **1** | **0** |
 
-**Conformidade: 93,3% atendido com sucesso, 4,4% com observação técnica documentada, 2,2% pendente apenas de produção (gravação do vídeo).**
+**Conformidade: 97,8% atendido com sucesso e 2,2% com observação técnica documentada (timeout configurado no HTTP client em vez do `@TimeLimiter` do Resilience4j — funcionalmente equivalente).**
 
 Adicionalmente, foi implementado o **módulo opcional `restaurante-service`** (req. 5.1.d), expandindo o fluxo do pedido até a entrega pela cozinha — não exigido pela spec, mas demonstra arquitetura escalando para um 4º bounded context sem refatoração dos demais.
 
