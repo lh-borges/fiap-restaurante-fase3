@@ -20,16 +20,17 @@ Projeto desenvolvido como **Tech Challenge da Fase 3** da PosTech FIAP. A especi
 
 1. [Como executar](#como-executar)
 2. [Documentação técnica](#documentação-técnica)
-3. [Testar com o Postman](#testar-com-o-postman)
-4. [Testes automatizados](#testes-automatizados)
-5. [Arquitetura e fluxo principal](#arquitetura-e-fluxo-principal)
-6. [Decisões arquiteturais — e por que escolhemos cada uma](#decisões-arquiteturais--e-por-que-escolhemos-cada-uma)
-7. [Requisitos da Fase 3 — o que foi feito e como validar](#requisitos-da-fase-3--o-que-foi-feito-e-como-validar)
-8. [O que ainda falta](#o-que-ainda-falta)
-9. [Serviços e portas](#serviços-e-portas)
-10. [Stack](#stack)
-11. [Estrutura do repositório](#estrutura-do-repositório)
-12. [Diagnóstico e inspeção](#diagnóstico-e-inspeção)
+3. [API — como aplicações cliente consomem o sistema](#api--como-aplicações-cliente-consomem-o-sistema)
+4. [Testar com o Postman](#testar-com-o-postman)
+5. [Testes automatizados](#testes-automatizados)
+6. [Arquitetura e fluxo principal](#arquitetura-e-fluxo-principal)
+7. [Decisões arquiteturais — e por que escolhemos cada uma](#decisões-arquiteturais--e-por-que-escolhemos-cada-uma)
+8. [Requisitos da Fase 3 — o que foi feito e como validar](#requisitos-da-fase-3--o-que-foi-feito-e-como-validar)
+9. [O que ainda falta](#o-que-ainda-falta)
+10. [Serviços e portas](#serviços-e-portas)
+11. [Stack](#stack)
+12. [Estrutura do repositório](#estrutura-do-repositório)
+13. [Diagnóstico e inspeção](#diagnóstico-e-inspeção)
 
 ---
 
@@ -94,9 +95,10 @@ A documentação formal do projeto vive em [`docs/`](docs/):
 
 | Artefato | O que é | Quando consultar |
 |---|---|---|
-| [`docs/documentacao-arquitetura.pdf`](docs/documentacao-arquitetura.pdf) | **Documento técnico ABNT** (17 páginas, Times 12, espaço 1.5, margens 3-2-3-2 cm) com capa, resumo, sumário, 10 capítulos e referências | Visão completa do sistema para leitura linear (avaliação, onboarding) |
+| [`docs/documentacao-arquitetura.pdf`](docs/documentacao-arquitetura.pdf) | **Documento técnico ABNT** (Times 12, espaço 1.5, margens 3-2-3-2 cm) com capa, resumo, sumário, 11 capítulos e referências | Visão completa do sistema para leitura linear (avaliação, onboarding) |
+| [`docs/api-integracao.md`](docs/api-integracao.md) | **Guia de integração da API** — endpoints, payloads, exemplos curl, códigos de erro de cada uma das 12 operações GraphQL | Quando uma aplicação cliente vai consumir o sistema |
 | [`docs/adr/`](docs/adr/) | **13 ADRs** (Architecture Decision Records, formato Nygard) cobrindo todas as decisões arquiteturais relevantes | Quando precisar entender *por que* algo foi feito de uma forma e não de outra |
-| [`docs/diagramas/`](docs/diagramas/) | **4 diagramas Mermaid** (componentes, sequência happy path, sequência resiliência, máquina de estados do pedido) | Visualização rápida de fluxo e topologia |
+| [`docs/diagramas/`](docs/diagramas/) | **6 diagramas** (2 C4 + componentes + 2 sequências + máquina de estados), em Mermaid + PNG | Visualização rápida de fluxo e topologia |
 | [`docs/roteiro-video.md`](docs/roteiro-video.md) | Roteiro detalhado do vídeo de apresentação (10 min) com falas, tempos e comandos exatos | Antes de gravar o vídeo de entrega |
 
 O PDF é versionado: novas versões substituem o mesmo arquivo (`docs/documentacao-arquitetura.pdf`). Para regenerar a partir do código-fonte (`docs/build-pdf/gerar_documentacao_pdf.py`):
@@ -105,6 +107,72 @@ O PDF é versionado: novas versões substituem o mesmo arquivo (`docs/documentac
 docker run --rm -v "$(pwd)/docs:/work" -w //work/build-pdf \
   python:3.12-slim sh -c "pip install -q reportlab && python gerar_documentacao_pdf.py"
 ```
+
+---
+
+## API — como aplicações cliente consomem o sistema
+
+> **Resumo em uma frase:** todos os 4 microsserviços expõem **API GraphQL** no endpoint `POST /graphql`, autenticada via JWT no header `Authorization: Bearer <token>` (exceto `cadastrarUsuario` e `login`, que não exigem token).
+
+### Endpoints
+
+| Serviço | Endpoint | Autenticação | Operações |
+|---|---|---|---|
+| `usuario-autenticacao` | `POST http://localhost:8081/graphql` | Não (`cadastrarUsuario`, `login`) / JWT (`me`) | 2 mutations + 1 query |
+| `restaurante-pedido` | `POST http://localhost:8082/graphql` | JWT (`USUARIO` ou `DONO_RESTAURANTE`) | 2 mutations + 3 queries |
+| `pagamento-service` | `POST http://localhost:8083/graphql` | JWT | 2 queries (sem mutations — fluxo é por eventos Kafka) |
+| `restaurante-service` | `POST http://localhost:8084/graphql` | JWT com perfil `DONO_RESTAURANTE` | 2 mutations + 2 queries |
+
+**Contrato completo, com payloads, exemplos e códigos de erro: [`docs/api-integracao.md`](docs/api-integracao.md).**
+
+### Quick-start via `curl`
+
+```bash
+# 1) Login -> obtém o JWT
+TOKEN=$(curl -s -X POST http://localhost:8081/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation { login(input: { email: \"usuario@fiap.com\", senha: \"usuario123\" }) { token } }"}' \
+  | python -c "import sys,json; print(json.load(sys.stdin)['data']['login']['token'])")
+
+# 2) Cria pedido (com o JWT no header)
+curl -s -X POST http://localhost:8082/graphql \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "query": "mutation($i: CriarPedidoInput!) { criarPedido(input: $i) { id status valorTotal } }",
+    "variables": {
+      "i": {
+        "restauranteId": "22222222-2222-4222-8222-222222222222",
+        "itens": [{
+          "produtoId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "nome": "X-Burger", "quantidade": 1, "preco": "25.90"
+        }]
+      }
+    }
+  }'
+```
+
+### Como descobrir o schema em runtime
+
+GraphQL é **introspectivo** — qualquer cliente pode explorar o schema diretamente:
+
+- **GraphiQL embutido** (console interativo): `http://localhost:808X/graphiql` (X = 1..4)
+- **Introspection query**: `POST /graphql` com `{ __schema { types { name } } }`
+- **OpenAPI/Swagger** (apenas no `restaurante-pedido`): `http://localhost:8082/swagger-ui.html` — útil para clientes que usam ferramentas REST tradicionais
+
+### Códigos de erro
+
+GraphQL não usa HTTP codes para erros de negócio por padrão — a resposta vem em `200 OK` com array `errors`. A classificação fica em `errors[].extensions.classification`:
+
+| Classification | Quando | HTTP equivalente |
+|---|---|---|
+| `BAD_REQUEST` | Validação, transição de estado proibida | 400 |
+| `UNAUTHORIZED` | JWT ausente/expirado/inválido | 401 |
+| `FORBIDDEN` | Perfil insuficiente | 403 |
+| `NOT_FOUND` | Recurso inexistente | 404 |
+| `INTERNAL_ERROR` | Erro inesperado | 500 |
+
+> O `restaurante-pedido` adicionalmente **traduz a classification para o HTTP code de fato** (via `GraphQlHttpStatusConfig`) — facilita integração com clientes REST tradicionais.
 
 ---
 

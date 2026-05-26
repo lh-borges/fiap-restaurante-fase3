@@ -38,6 +38,7 @@ docker-compose.override.yaml
 compose.override.yml
 compose.override.yaml
 
-### Claude Code — contexto pessoal por dev (não versionado) ###
-CLAUDE.md
-.claude/
+### Notas locais por desenvolvedor (não versionado) ###
+*.local.md
+NOTES.md
+.local/

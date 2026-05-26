@@ -244,7 +244,36 @@ Postman -> 2. Pedidos -> Pedido por ID
 > `pedido.pronto-para-cozinha`, com os itens (sem preco — a
 > cozinha nao se importa com isso, eh outro bounded context)."
 
-**GraphiQL `:8084`, logado como `DONO_RESTAURANTE`:**
+### 💡 Conceito — o que e GraphiQL
+
+> "Antes de mostrar o codigo, deixa eu explicar a ferramenta que
+> vou usar aqui. **GraphiQL** (com 'i' minusculo no meio, le-se
+> 'graphical') eh um console interativo para GraphQL que vem
+> embutido em cada um dos nossos servicos. Pense nele como um
+> Postman embutido — mas com autocomplete do schema e documentacao
+> sempre atualizada, porque le direto do servidor.
+>
+> Para usar:
+>
+> 1. Abro no navegador: `http://localhost:8084/graphiql`.
+> 2. Como esta endpoint exige JWT do perfil DONO_RESTAURANTE,
+>    preciso colar o token. Em GraphiQL, isso vai no painel
+>    inferior esquerdo, 'Request Headers':
+>
+>    ```json
+>    { \"Authorization\": \"Bearer eyJraWQi...\" }
+>    ```
+>
+> 3. No painel superior esquerdo, escrevo a query ou mutation.
+>    Autocomplete (Ctrl+Space) ajuda — ele conhece todos os tipos.
+> 4. Clico no botao 'play' (▶) ou aperto Ctrl+Enter.
+> 5. A resposta sai no painel da direita, em JSON.
+>
+> Pra ver a documentacao completa do schema (todas as queries,
+> mutations e tipos), eh so clicar em 'Docs' no canto superior
+> direito."
+
+**Agora na pratica, no GraphiQL `:8084`, com token de `dono@fiap.com` ja colado em Request Headers:**
 
 ```graphql
 query { filaCozinha { id pedidoId status } }
@@ -655,7 +684,13 @@ Termos que aparecem no video, explicados em uma linha:
 - [ ] Postman environment `fiap-fase-3-restaurante` ATIVO
 - [ ] Login feito (token em `{{token}}`)
 - [ ] Kafka UI aberto em aba separada
-- [ ] GraphiQL `:8084` aberto em outra aba (token DONO_RESTAURANTE colado em Headers)
+- [ ] **GraphiQL `:8084` aberto em outra aba**, com:
+  - Login feito como `dono@fiap.com` / `dono123` no `:8081/graphiql` antes, para copiar o token
+  - O token colado no painel inferior esquerdo (**Request Headers**) no formato:
+    ```json
+    { "Authorization": "Bearer <token>" }
+    ```
+  - Painel "Docs" abre se você esquecer alguma operação (canto superior direito)
 - [ ] Segundo terminal aberto para `docker logs -f pagamento-service`
 - [ ] [auditoria-conformidade.md](auditoria-conformidade.md) aberta em uma aba (consulta rapida de IDs)
 - [ ] Audio + camera testados (~5 min de gravacao de teste)

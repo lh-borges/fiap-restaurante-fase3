@@ -528,15 +528,16 @@ def build(filename: str):
     toc = TableOfContents()
     toc.levelStyles = styles["toc"]
     story.append(toc)
-    story.append(PageBreak())
 
     # ------------------------------------------------------------- #
     # 1. INTRODUCAO (a partir daqui, paginas numeradas)
     # ------------------------------------------------------------- #
     from reportlab.platypus.doctemplate import NextPageTemplate
 
+    # PageBreak unico que (1) encerra o sumario e (2) ativa
+    # o template "numbered" para as paginas seguintes
     story.append(NextPageTemplate("numbered"))
-    story.append(PageBreak())  # trigger template switch
+    story.append(PageBreak())
 
     story.append(p("1 INTRODUÇÃO", h1))
     story.append(p(
@@ -938,9 +939,137 @@ def build(filename: str):
     ))
 
     # ------------------------------------------------------------- #
-    # 5. RESILIENCIA
+    # 5. GUIA DE INTEGRACAO (API)
     # ------------------------------------------------------------- #
-    story.append(p("5 RESILIÊNCIA E TOLERÂNCIA A FALHAS", h1))
+    story.append(p("5 GUIA DE INTEGRAÇÃO", h1))
+    story.append(p(
+        "Esta seção descreve o contrato de API exposto pelo "
+        "sistema: como uma aplicação cliente faz para autenticar, "
+        "criar pedidos e consultar status. A referência completa "
+        "(com payloads detalhados, exemplos e erros) está em "
+        "<font face='Courier'>docs/api-integracao.md</font> no "
+        "repositório; este capítulo apresenta o panorama essencial.",
+        body,
+    ))
+
+    story.append(p("5.1 Visão geral do contrato", h2))
+    story.append(p(
+        "Todos os quatro microsserviços expõem uma <b>API GraphQL</b> "
+        "no endpoint <font face='Courier'>POST /graphql</font>, "
+        "autenticada via JWT no header "
+        "<font face='Courier'>Authorization: Bearer &lt;token&gt;</font>. "
+        "As únicas exceções são as mutations "
+        "<font face='Courier'>cadastrarUsuario</font> e "
+        "<font face='Courier'>login</font> do <i>usuario-autenticacao</i>, "
+        "que não exigem token. A estrutura de cada chamada segue o "
+        "padrão GraphQL:",
+        body,
+    ))
+    story.append(p(
+        '{"query":"&lt;query ou mutation&gt;","variables":{...}}',
+        code,
+    ))
+
+    story.append(p(
+        "Resposta segue o mesmo padrão, com campos "
+        "<font face='Courier'>data</font> (sucesso) e "
+        "<font face='Courier'>errors</font> (presente apenas em "
+        "falhas).",
+        body,
+    ))
+
+    story.append(p("5.2 Endpoints disponíveis", h2))
+    story.append(p(
+        "A Tabela 1 sumariza os endpoints e seu nível de "
+        "autenticação. A Tabela 2 lista as 12 operações disponíveis "
+        "no sistema.",
+        body,
+    ))
+
+    endpoints_data = [
+        ["Serviço", "Endpoint", "Autenticação"],
+        ["usuario-autenticacao", "POST :8081/graphql", "Não (cadastrarUsuario, login); JWT (me)"],
+        ["restaurante-pedido", "POST :8082/graphql", "JWT (USUARIO ou DONO_RESTAURANTE)"],
+        ["pagamento-service", "POST :8083/graphql", "JWT"],
+        ["restaurante-service", "POST :8084/graphql", "JWT com perfil DONO_RESTAURANTE"],
+    ]
+    story.append(table_simple(endpoints_data, col_widths=[4.5 * cm, 4.5 * cm, 7.5 * cm]))
+    story.append(Spacer(1, 0.3 * cm))
+
+    operacoes_data = [
+        ["Operação", "Serviço", "Quando usar"],
+        ["mutation cadastrarUsuario", "auth", "Criar conta nova"],
+        ["mutation login", "auth", "Obter JWT (validade 1h)"],
+        ["query me", "auth", "Ver dados do usuário corrente"],
+        ["mutation criarPedido", "pedido", "Criar pedido no status CRIADO"],
+        ["mutation confirmarPedido", "pedido", "Confirmar e disparar processamento"],
+        ["query pedidoPorId", "pedido", "Consultar (com ownership check)"],
+        ["query meusPedidos", "pedido", "Listar pedidos do cliente do JWT"],
+        ["query pagamentoPorPedido", "pagamento", "Status do pagamento"],
+        ["query pagamentosPendentes", "pagamento", "Lista da fila de reprocessamento"],
+        ["query filaCozinha", "cozinha", "Listar fila por status"],
+        ["mutation iniciarPreparo", "cozinha", "RECEBIDO → EM_PREPARO"],
+        ["mutation marcarComoPronto", "cozinha", "EM_PREPARO → PRONTO"],
+    ]
+    story.append(table_simple(operacoes_data, col_widths=[5.5 * cm, 3 * cm, 8 * cm]))
+
+    story.append(p("5.3 Fluxo recomendado de integração", h2))
+    story.append(p(
+        "Para uma aplicação cliente integrar do zero, a sequência "
+        "padrão é:",
+        body,
+    ))
+    story.extend(bullets([
+        "<b>1.</b> <font face='Courier'>cadastrarUsuario</font> (apenas se a conta ainda não existe; pode ser pulado se já houver registro).",
+        "<b>2.</b> <font face='Courier'>login</font> — guarda o token retornado.",
+        "<b>3.</b> <font face='Courier'>criarPedido</font> com o JWT no header. Devolve o pedido em CRIADO, com valor total já calculado pelo servidor.",
+        "<b>4.</b> <font face='Courier'>confirmarPedido</font>. Publica o evento Kafka <font face='Courier'>pedido.criado</font>, disparando o fluxo de pagamento em background.",
+        "<b>5.</b> Polling com <font face='Courier'>pedidoPorId</font> a cada poucos segundos. Em ~5 s, o status transita para PAGO (caminho feliz) ou PENDENTE_PAGAMENTO (gateway externo fora).",
+        "<b>6.</b> Para clientes do tipo dono do restaurante, <font face='Courier'>filaCozinha</font> + <font face='Courier'>iniciarPreparo</font> + <font face='Courier'>marcarComoPronto</font> avançam o pedido até PRONTO.",
+    ], bullet))
+
+    story.append(p("5.4 Classificação dos erros", h2))
+    story.append(p(
+        "Erros não usam códigos HTTP convencionais por padrão — a "
+        "resposta vem em 200 OK com array "
+        "<font face='Courier'>errors</font>. A classificação fica "
+        "em <font face='Courier'>errors[].extensions.classification</font>:",
+        body,
+    ))
+    erros_data = [
+        ["classification", "Significado", "HTTP equivalente"],
+        ["BAD_REQUEST", "Validação, transição de estado proibida", "400"],
+        ["UNAUTHORIZED", "JWT ausente, expirado ou inválido", "401"],
+        ["FORBIDDEN", "Perfil insuficiente para a operação", "403"],
+        ["NOT_FOUND", "Recurso inexistente", "404"],
+        ["INTERNAL_ERROR", "Erro inesperado no servidor", "500"],
+    ]
+    story.append(table_simple(erros_data, col_widths=[4 * cm, 8 * cm, 4 * cm]))
+    story.append(Spacer(1, 0.2 * cm))
+    story.append(p(
+        "O <i>restaurante-pedido</i> tem um adapter adicional "
+        "(<font face='Courier'>GraphQlHttpStatusConfig</font>) que "
+        "traduz a classification para o status HTTP de fato, "
+        "facilitando integração com clientes REST tradicionais.",
+        body,
+    ))
+
+    story.append(p("5.5 Como descobrir o schema em runtime", h2))
+    story.append(p(
+        "GraphQL é introspectivo. Há três formas de descobrir o "
+        "schema em runtime:",
+        body,
+    ))
+    story.extend(bullets([
+        "<b>GraphiQL embutido</b> — console interativo em <font face='Courier'>:8081/graphiql</font>, <font face='Courier'>:8082/graphiql</font>, <font face='Courier'>:8083/graphiql</font> e <font face='Courier'>:8084/graphiql</font>. Clique em \"Docs\" no canto superior direito para navegar pelo schema.",
+        "<b>Introspection query</b> — POST padrão com <font face='Courier'>{ __schema { types { name kind } } }</font>.",
+        "<b>OpenAPI/Swagger</b> (apenas no restaurante-pedido) — contrato HTTP documentado em <font face='Courier'>http://localhost:8082/swagger-ui.html</font>, útil para clientes REST tradicionais.",
+    ], bullet))
+
+    # ------------------------------------------------------------- #
+    # 6. RESILIENCIA
+    # ------------------------------------------------------------- #
+    story.append(p("6 RESILIÊNCIA E TOLERÂNCIA A FALHAS", h1))
     story.append(p(
         "A resiliência do sistema concentra-se na integração com o "
         "gateway externo procpag, ponto único de instabilidade "
@@ -956,7 +1085,7 @@ def build(filename: str):
         "Figura 6 — Sequência de falha do gateway + reprocessamento automático.",
     ))
 
-    story.append(p("5.1 Padrões aplicados", h2))
+    story.append(p("6.1 Padrões aplicados", h2))
     story.append(p(
         "Os quatro padrões clássicos de resiliência foram "
         "aplicados em camadas:",
@@ -969,7 +1098,7 @@ def build(filename: str):
         "<b>Fallback</b> — quando todas as estratégias acima falham, o pagamento é marcado como <b>PENDENTE</b>, e o evento <font face='Courier'>pagamento.pendente</font> é publicado no Kafka. O pedido nunca falha do ponto de vista do cliente.",
     ], bullet))
 
-    story.append(p("5.2 Worker de reprocessamento", h2))
+    story.append(p("6.2 Worker de reprocessamento", h2))
     story.append(p(
         "Vive exclusivamente no módulo <i>pagamento-service</i>. É um "
         "<font face='Courier'>@Scheduled</font> que executa a "
@@ -995,7 +1124,7 @@ def build(filename: str):
         body,
     ))
 
-    story.append(p("5.3 Garantias e limitações", h2))
+    story.append(p("6.3 Garantias e limitações", h2))
     story.append(p(
         "O sistema garante <b>at-least-once</b> na entrega de "
         "eventos Kafka (o consumer pode receber o mesmo evento "
@@ -1019,9 +1148,9 @@ def build(filename: str):
     # ------------------------------------------------------------- #
     # 6. SEGURANCA
     # ------------------------------------------------------------- #
-    story.append(p("6 SEGURANÇA", h1))
+    story.append(p("7 SEGURANÇA", h1))
 
-    story.append(p("6.1 Autenticação e autorização", h2))
+    story.append(p("7.1 Autenticação e autorização", h2))
     story.append(p(
         "A autenticação é baseada em <b>JWT RS256</b> emitido "
         "pelo <i>usuario-autenticacao</i>. A chave privada RSA "
@@ -1043,7 +1172,7 @@ def build(filename: str):
         body,
     ))
 
-    story.append(p("6.2 Ownership check em pedidos", h2))
+    story.append(p("7.2 Ownership check em pedidos", h2))
     story.append(p(
         "Na query <font face='Courier'>pedidoPorId</font>, o "
         "serviço extrai o <font face='Courier'>clienteId</font> do "
@@ -1059,7 +1188,7 @@ def build(filename: str):
     # ------------------------------------------------------------- #
     # 7. DECISOES ARQUITETURAIS
     # ------------------------------------------------------------- #
-    story.append(p("7 DECISÕES ARQUITETURAIS", h1))
+    story.append(p("8 DECISÕES ARQUITETURAIS", h1))
     story.append(p(
         "Cada decisão técnica significativa do projeto está "
         "registrada como ADR (Architecture Decision Record) na "
@@ -1104,7 +1233,7 @@ def build(filename: str):
     # ------------------------------------------------------------- #
     # 8. TESTES
     # ------------------------------------------------------------- #
-    story.append(p("8 ESTRATÉGIA DE TESTES", h1))
+    story.append(p("9 ESTRATÉGIA DE TESTES", h1))
     story.append(p(
         "A suíte de testes do projeto totaliza <b>285 testes "
         "automatizados</b> distribuídos pelos quatro módulos, "
@@ -1140,7 +1269,7 @@ def build(filename: str):
     # ------------------------------------------------------------- #
     # 9. OPERACAO E DEPLOY
     # ------------------------------------------------------------- #
-    story.append(p("9 OPERAÇÃO E DEPLOY", h1))
+    story.append(p("10 OPERAÇÃO E DEPLOY", h1))
     story.append(p(
         "Todo o sistema é orquestrado por Docker Compose. O "
         "comando único de subida é:",
@@ -1158,7 +1287,7 @@ def build(filename: str):
         body,
     ))
 
-    story.append(p("9.1 Limites de recursos", h2))
+    story.append(p("10.1 Limites de recursos", h2))
     story.append(p(
         "Cada serviço tem limites explícitos de memória e CPU "
         "configurados em <font face='Courier'>deploy.resources.limits</font>. "
@@ -1169,7 +1298,7 @@ def build(filename: str):
         body,
     ))
 
-    story.append(p("9.2 Observabilidade", h2))
+    story.append(p("10.2 Observabilidade", h2))
     story.append(p(
         "Cada aplicação expõe Spring Boot Actuator nos "
         "endpoints <font face='Courier'>/actuator/health</font>, "
@@ -1186,7 +1315,7 @@ def build(filename: str):
         body,
     ))
 
-    story.append(p("9.3 Performance", h2))
+    story.append(p("10.3 Performance", h2))
     story.append(p(
         "Três otimizações foram aplicadas para reduzir o "
         "consumo de recursos e acelerar o startup das "
@@ -1202,7 +1331,7 @@ def build(filename: str):
     # ------------------------------------------------------------- #
     # 10. CONSIDERACOES FINAIS
     # ------------------------------------------------------------- #
-    story.append(p("10 CONSIDERAÇÕES FINAIS", h1))
+    story.append(p("11 CONSIDERAÇÕES FINAIS", h1))
     story.append(p(
         "A arquitetura desenhada cumpre integralmente os "
         "requisitos da Fase 3 e ainda implementa o módulo "
