@@ -4,6 +4,14 @@ Sistema de pedido online para restaurante, dividido em **4 microsserviços** Spr
 
 Projeto desenvolvido como **Tech Challenge da Fase 3** da PosTech FIAP. A especificação completa está em [`requisito/tech-challenge-fase-03.pdf`](../requisito/tech-challenge-fase-03.pdf).
 
+## 🔗 Acesso ao código e ao vídeo
+
+| Artefato | Link |
+|---|---|
+| 📦 **Repositório (código-fonte, ADRs, Postman, diagramas)** | [github.com/lh-borges/fiap-restaurante-fase3](https://github.com/lh-borges/fiap-restaurante-fase3) |
+| 🎬 **Vídeo de apresentação no YouTube** | *Aguardando publicação após a gravação* (roteiro pronto em [`docs/roteiro-video.md`](docs/roteiro-video.md)) |
+| 📄 **Documentação técnica em PDF (ABNT)** | [`docs/documentacao-arquitetura.pdf`](docs/documentacao-arquitetura.pdf) |
+
 > **Para quem vai executar pela primeira vez:** comece pela seção [Como executar](#como-executar) e depois [Testar com o Postman](#testar-com-o-postman). O sistema inteiro sobe com **um único comando**.
 
 ---
