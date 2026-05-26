@@ -400,6 +400,95 @@ def build(filename: str):
     story.append(PageBreak())
 
     # ------------------------------------------------------------- #
+    # ACESSO AO CODIGO E AO VIDEO (elemento pre-textual)
+    # ------------------------------------------------------------- #
+    # URLs centralizadas aqui para facilitar manutencao: trocar
+    # YOUTUBE_URL para a string da URL apos a gravacao e regerar o PDF.
+    GITHUB_URL = "https://github.com/lh-borges/fiap-restaurante-fase3"
+    YOUTUBE_URL = None  # ex.: "https://youtu.be/XXXXXXXXXXX" apos a publicacao
+
+    story.append(Spacer(1, 4 * cm))
+    story.append(p("ACESSO AO CÓDIGO E AO VÍDEO", h1))
+    story.append(Spacer(1, 0.6 * cm))
+
+    link_label_style = ParagraphStyle(
+        "LinkLabel",
+        parent=body,
+        firstLineIndent=0,
+        fontName=FONT_BODY_BOLD,
+        fontSize=13,
+        leading=18,
+        spaceBefore=16,
+        spaceAfter=4,
+    )
+    link_url_style = ParagraphStyle(
+        "LinkUrl",
+        parent=body,
+        firstLineIndent=0,
+        fontName="Courier",
+        fontSize=12,
+        leading=16,
+        textColor=HexColor("#0645AD"),
+        spaceAfter=8,
+    )
+    link_desc_style = ParagraphStyle(
+        "LinkDesc",
+        parent=body,
+        firstLineIndent=0,
+        fontSize=11,
+        leading=15,
+        textColor=HexColor("#555555"),
+        spaceAfter=14,
+    )
+
+    # Repositorio
+    story.append(p("Repositório no GitHub", link_label_style))
+    story.append(p(
+        f'<link href="{GITHUB_URL}"><u>{GITHUB_URL}</u></link>',
+        link_url_style,
+    ))
+    story.append(p(
+        "Código-fonte completo, histórico de PRs, coleção Postman, "
+        "ADRs e diagramas. Clone o repositório e execute "
+        "<font face='Courier'>docker compose up -d --build</font> "
+        "na raiz para subir o sistema inteiro com um único comando.",
+        link_desc_style,
+    ))
+
+    # Video
+    story.append(p("Vídeo de apresentação no YouTube", link_label_style))
+    if YOUTUBE_URL:
+        story.append(p(
+            f'<link href="{YOUTUBE_URL}"><u>{YOUTUBE_URL}</u></link>',
+            link_url_style,
+        ))
+        story.append(p(
+            "Apresentação técnica de até 10 minutos cobrindo o fluxo "
+            "completo do sistema, demonstração de resiliência e as "
+            "decisões arquiteturais. Roteiro detalhado em "
+            "<font face='Courier'>docs/roteiro-video.md</font>.",
+            link_desc_style,
+        ))
+    else:
+        story.append(p(
+            "<i>Aguardando publicação após a gravação.</i>",
+            ParagraphStyle("Aguardando", parent=link_url_style,
+                           textColor=HexColor("#888888"),
+                           fontName=FONT_BODY_ITALIC),
+        ))
+        story.append(p(
+            "O vídeo de apresentação técnica (até 10 minutos) está "
+            "em fase de gravação. O roteiro detalhado, com falas, "
+            "tempos e comandos exatos, está disponível em "
+            "<font face='Courier'>docs/roteiro-video.md</font> e "
+            "cobre os 7 blocos da apresentação. A URL desta seção "
+            "será atualizada após a publicação no YouTube.",
+            link_desc_style,
+        ))
+
+    story.append(PageBreak())
+
+    # ------------------------------------------------------------- #
     # RESUMO
     # ------------------------------------------------------------- #
     story.append(p("RESUMO", h1))
