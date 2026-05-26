@@ -528,15 +528,16 @@ def build(filename: str):
     toc = TableOfContents()
     toc.levelStyles = styles["toc"]
     story.append(toc)
-    story.append(PageBreak())
 
     # ------------------------------------------------------------- #
     # 1. INTRODUCAO (a partir daqui, paginas numeradas)
     # ------------------------------------------------------------- #
     from reportlab.platypus.doctemplate import NextPageTemplate
 
+    # PageBreak unico que (1) encerra o sumario e (2) ativa
+    # o template "numbered" para as paginas seguintes
     story.append(NextPageTemplate("numbered"))
-    story.append(PageBreak())  # trigger template switch
+    story.append(PageBreak())
 
     story.append(p("1 INTRODUÇÃO", h1))
     story.append(p(
