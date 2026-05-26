@@ -9,7 +9,7 @@ Projeto desenvolvido como **Tech Challenge da Fase 3** da PosTech FIAP. A especi
 | Artefato | Link |
 |---|---|
 | 📦 **Repositório (código-fonte, ADRs, Postman, diagramas)** | [github.com/lh-borges/fiap-restaurante-fase3](https://github.com/lh-borges/fiap-restaurante-fase3) |
-| 🎬 **Vídeo de apresentação no YouTube** | *Aguardando publicação após a gravação* (roteiro pronto em [`docs/roteiro-video.md`](docs/roteiro-video.md)) |
+| 🎬 **Vídeo de apresentação no YouTube** | [youtube.com/watch?v=gdcr4CRtNLU](https://www.youtube.com/watch?v=gdcr4CRtNLU) — roteiro detalhado em [`docs/roteiro-video.md`](docs/roteiro-video.md) |
 | 📄 **Documentação técnica em PDF (ABNT)** | [`docs/documentacao-arquitetura.pdf`](docs/documentacao-arquitetura.pdf) |
 
 > **Para quem vai executar pela primeira vez:** comece pela seção [Como executar](#como-executar) e depois [Testar com o Postman](#testar-com-o-postman). O sistema inteiro sobe com **um único comando**.
@@ -718,17 +718,19 @@ Cada decisão técnica deste projeto carrega um trade-off. Esta seção document
 | ✅ Arquivo para teste dos endpoints | Feito | Collection + environment Postman em [`docs/`](docs/) |
 | ✅ Documentação (diagrama, fluxo, pontos de resiliência) | Feito | Este README — seção [Arquitetura e fluxo principal](#arquitetura-e-fluxo-principal) |
 | ✅ Repositório com o código-fonte | Feito | Este repositório |
-| ❌ Vídeo de apresentação (até 10 min) | **Pendente** | Ainda precisa ser gravado |
+| ✅ Vídeo de apresentação (até 10 min) | Feito | [youtube.com/watch?v=gdcr4CRtNLU](https://www.youtube.com/watch?v=gdcr4CRtNLU) |
 
 ---
 
-## O que ainda falta
+## Entregas opcionais não realizadas
+
+Todas as entregas obrigatórias foram concluídas, incluindo o vídeo de apresentação
+([youtube.com/watch?v=gdcr4CRtNLU](https://www.youtube.com/watch?v=gdcr4CRtNLU)).
+Itens marcados como **opcionais** na spec que ficaram fora do escopo:
 
 | Item | Situação |
 |---|---|
-| 🎬 **Vídeo de apresentação** (até 10 min) | **Pendente — única entrega bloqueante** restante. Roteiro detalhado já escrito em [`docs/roteiro-video.md`](docs/roteiro-video.md). Falta gravar. |
 | 🧹 Limpeza de testes duplicados *(opcional)* | Após o merge de duas branches de testes em paralelo, alguns use cases têm versão "consolidada" (ex.: `PedidoUseCaseServiceTest`) coexistindo com versão "granular" (ex.: `CriarPedidoServiceTest` + `ConfirmarPedidoServiceTest` + ...). Funciona; só duplica execução. Pode ser limpado num PR à parte. |
-| 📐 Diagrama C4 formal *(opcional)* | A spec aceita "diagrama de componentes, sequência **ou** C4". O diagrama de componentes ASCII deste README atende o requisito; um C4 formal seria um plus visual. |
 | 🧩 `api-gateway` *(opcional)* | Marcado como opcional na spec (item 5.1). Análise feita: ganho funcional pequeno para o esforço, complica a demo de resiliência. Decisão consciente de não fazer. O `restaurante-service` (outro opcional) foi implementado. |
 
 ---
