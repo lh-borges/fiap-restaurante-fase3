@@ -28,13 +28,19 @@
 >
 > A collection
 > [`fiap-fase-3-restaurante.postman_collection.json`](fiap-fase-3-restaurante.postman_collection.json)
-> tem uma pasta especial **`5. Roteiro do Video`** com **10 requisicoes
-> numeradas em sequencia** (`01 → 10`), batendo exatamente com a ordem
-> dos blocos `3.1`, `3.2`, `3.3`, `3.4`, `3.5`, e `4.1`–`4.4` deste
+> tem uma pasta especial **`5. Roteiro do Video`** com **14 requisicoes
+> numeradas em sequencia** (`01 → 14`), batendo exatamente com a ordem
+> dos blocos `3.1`–`3.5` (incluindo cozinha) e `4.1`–`4.4` deste
 > documento. Durante a gravacao, basta executar os requests **na
 > ordem** (clique → Send → proximo). Os tokens e IDs sao salvos
 > automaticamente em variaveis de collection (`{{token}}`,
-> `{{pedidoId}}`), entao nao precisa copiar nada.
+> `{{pedidoId}}`, `{{pedidoCozinhaId}}`), entao nao precisa copiar nada.
+>
+> O bloco 3.5 (fluxo da cozinha) tem **duas formas** de executar:
+> **(A)** via os requests `06`–`08` desta pasta, ou **(B)** via o
+> console GraphiQL em `:8084` (explicado no bloco 3.5 abaixo). Use o
+> que preferir; o resultado eh o mesmo. **Esta pasta usa a opcao (A)**
+> porque eh mais rapida e mantem tudo num so lugar durante a gravacao.
 >
 > As demais pastas (`1. Autenticacao`, `2. Pedidos`, `3. Pagamento`,
 > `4. Massa de Testes`) permanecem como referencia de todas as
@@ -289,39 +295,58 @@ Postman -> 5. Roteiro do Video -> 04 - Pedido por ID (espera PAGO - bloco 3.4)
 > mutations e tipos), eh so clicar em 'Docs' no canto superior
 > direito."
 
-**No Postman, faca o login do DONO para pegar o token:**
+**Agora, na pratica, no Postman:**
 
 ```
-Postman -> 5. Roteiro do Video -> 05 - Login como Dono (token p/ GraphiQL :8084 - bloco 3.5)
+Postman -> 5. Roteiro do Video -> 05 - Login como Dono (bloco 3.5 - cozinha)
 ```
 
-> "Copio o token desta response (campo `data.login.token`) e
-> colo no Request Headers do GraphiQL `:8084`."
+> "Logo como dono. O `{{token}}` agora tem perfil `DONO_RESTAURANTE`,
+> exigido pelas operacoes da cozinha."
 
-**Agora na pratica, no GraphiQL `:8084`, com token de `dono@fiap.com` ja colado em Request Headers:**
-
-```graphql
-query { filaCozinha { id pedidoId status } }
+```
+Postman -> 5. Roteiro do Video -> 06 - Fila da Cozinha (bloco 3.5)
 ```
 
-> "Aqui esta o pedido, status `RECEBIDO`. Sou o dono do
-> restaurante; vou iniciar o preparo."
+> "Aqui esta a fila — o pedido que acabamos de pagar aparece com
+> status `RECEBIDO`. O test script ja salvou o `{{pedidoCozinhaId}}`
+> para mim."
 
-```graphql
-mutation { iniciarPreparo(pedidoCozinhaId: "<id>") { status } }
+```
+Postman -> 5. Roteiro do Video -> 07 - Iniciar Preparo (bloco 3.5)
 ```
 
 > "Status `EM_PREPARO`. Isso publicou `pedido.em-preparo` no
 > Kafka, e o `restaurante-pedido` consumiu e refletiu o status
 > no agregado principal."
 
-```graphql
-mutation { marcarComoPronto(pedidoCozinhaId: "<id>") { status } }
+```
+Postman -> 5. Roteiro do Video -> 08 - Marcar como Pronto (bloco 3.5)
 ```
 
-> "`PRONTO`. Volto no Postman e consulto o pedido original... ele
-> tambem esta `PRONTO`. **Quatro microsservicos coordenados, com
-> zero chamada sincrona entre eles.** Pura mensageria assincrona."
+> "`PRONTO`. Volto para o token do cliente comum..."
+
+```
+Postman -> 5. Roteiro do Video -> 09 - Re-login como Usuario (bloco 3.5 - voltar p/ consulta)
+Postman -> 5. Roteiro do Video -> 10 - Pedido por ID (espera PRONTO - fim do bloco 3.5)
+```
+
+> "...e consulto o pedido original. Ele tambem esta `PRONTO`.
+> **Quatro microsservicos coordenados, com zero chamada sincrona
+> entre eles.** Pura mensageria assincrona."
+
+> **Alternativa visual via GraphiQL `:8084`** (use se preferir
+> mostrar o autocomplete e o painel de Docs durante a gravacao —
+> a explicacao conceitual acima ja fica no video de qualquer jeito):
+>
+> ```graphql
+> query { filaCozinha { id pedidoId status } }
+> mutation { iniciarPreparo(pedidoCozinhaId: "<id>") { status } }
+> mutation { marcarComoPronto(pedidoCozinhaId: "<id>") { status } }
+> ```
+>
+> Cole o token do passo 05 em **Request Headers**:
+> `{ "Authorization": "Bearer <token>" }`.
 
 **✓ Checkpoint — bloco 3:**
 
@@ -366,14 +391,12 @@ docker stop procpag
 
 ### 4.2 · Criar e confirmar novo pedido (30s)
 
-**Importante:** antes destes dois, execute `06 - Re-login como Usuario`
-para garantir que o `{{token}}` esta com perfil USUARIO (o passo 05
-trocou o token para DONO).
+**Nota:** o passo 09 ja deixou o `{{token}}` como USUARIO, entao
+podemos seguir direto:
 
 ```
-Postman -> 5. Roteiro do Video -> 06 - Re-login como Usuario (preparar bloco 4)
-Postman -> 5. Roteiro do Video -> 07 - Criar Pedido (gateway off - bloco 4.2)
-Postman -> 5. Roteiro do Video -> 08 - Confirmar Pedido (gateway off - bloco 4.2)
+Postman -> 5. Roteiro do Video -> 11 - Criar Pedido (gateway off - bloco 4.2)
+Postman -> 5. Roteiro do Video -> 12 - Confirmar Pedido (gateway off - bloco 4.2)
 ```
 
 > "Postman: novo pedido, confirmacao. O `pagamento-service`
@@ -398,7 +421,7 @@ Postman -> 5. Roteiro do Video -> 08 - Confirmar Pedido (gateway off - bloco 4.2
 ### 4.3 · Ver status PENDENTE_PAGAMENTO (10s)
 
 ```
-Postman -> 5. Roteiro do Video -> 09 - Pedido por ID (espera PENDENTE_PAGAMENTO - bloco 4.3)
+Postman -> 5. Roteiro do Video -> 13 - Pedido por ID (espera PENDENTE_PAGAMENTO - bloco 4.3)
 ```
 
 > "`PENDENTE_PAGAMENTO`. **O cliente nao recebeu erro.** O sistema
@@ -426,7 +449,7 @@ docker start procpag
 > "*Reprocessando pedido pendente... aprovado!*"
 
 ```
-Postman -> 5. Roteiro do Video -> 10 - Pedido por ID (espera PAGO apos reprocesso - bloco 4.4)
+Postman -> 5. Roteiro do Video -> 14 - Pedido por ID (espera PAGO apos reprocesso - bloco 4.4)
 ```
 
 > "`PAGO`. **Recuperou sozinho.**"
